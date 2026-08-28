@@ -76,6 +76,11 @@
             padding: 8px 12px;
             border-radius: 6px;
         }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+        }
         button {
             background-color: #3498db;
             color: white;
@@ -86,11 +91,16 @@
             border-radius: 6px;
             cursor: pointer;
             width: 100%;
-            margin-top: 12px;
             transition: background 0.2s;
         }
         button:active {
             background-color: #2980b9;
+        }
+        button.stop-btn {
+            background-color: #e74c3c;
+        }
+        button.stop-btn:active {
+            background-color: #c0392b;
         }
         .table-container {
             overflow-x: auto;
@@ -139,7 +149,10 @@
             <span>KPM: <span id="kpm">0</span></span>
             <span>ミス: <span id="errors">0</span></span>
         </div>
-        <button id="startBtn" onclick="startTest()">テスト開始</button>
+        <div class="btn-group">
+            <button id="startBtn" onclick="startTest()">テスト開始</button>
+            <button id="stopBtn" class="stop-btn" onclick="finishTest()" disabled>測定終了</button>
+        </div>
     </div>
 
     <div class="card">
@@ -158,7 +171,7 @@
                 <tbody></tbody>
             </table>
         </div>
-        <button onclick="downloadCSV()" style="background-color: #27ae60;">CSV保存（Excel用）</button>
+        <button onclick="downloadCSV()" style="background-color: #27ae60; margin-top: 12px;">CSV保存（Excel用）</button>
     </div>
 
     <script>
@@ -197,6 +210,7 @@
             
             document.getElementById("startBtn").innerText = "計測中...";
             document.getElementById("startBtn").disabled = true;
+            document.getElementById("stopBtn").disabled = false;
         }
 
         function updateTimer() {
@@ -227,13 +241,16 @@
         });
 
         function finishTest() {
+            if (!isStarted) return;
+
             clearInterval(timerInterval);
             isStarted = false;
             inputEl.disabled = true;
 
             const endTime = new Date();
             const totalTime = ((endTime - startTime) / 1000).toFixed(2);
-            const finalKpm = Math.round(targetText.length / (totalTime / 60));
+            const typedLength = inputEl.value.length;
+            const finalKpm = totalTime > 0 ? Math.round(typedLength / (totalTime / 60)) : 0;
 
             const name = document.getElementById("subjectName").value || "匿名";
             const condition = document.getElementById("musicCondition").value;
@@ -255,6 +272,7 @@
             
             document.getElementById("startBtn").innerText = "次のテストを開始";
             document.getElementById("startBtn").disabled = false;
+            document.getElementById("stopBtn").disabled = true;
         }
 
         function downloadCSV() {
@@ -279,4 +297,3 @@
     </script>
 </body>
 </html>
-
