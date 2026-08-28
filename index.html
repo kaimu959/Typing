@@ -1,318 +1,853 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>タイピング速度と音楽に関する探究実験</title>
-    <style>
-        * {
-            box-sizing: border-box;
-        }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 15px;
-            background-color: #f4f7f6;
-            color: #333;
-        }
-        h1 {
-            text-align: center;
-            color: #2c3e50;
-            font-size: 1.5rem;
-            margin-top: 10px;
-            margin-bottom: 20px;
-        }
-        .card {
-            background: #fff;
-            padding: 18px;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            margin-bottom: 18px;
-        }
-        label {
-            font-weight: bold;
-            display: block;
-            margin-bottom: 6px;
-            font-size: 0.95rem;
-        }
-        select, input[type="text"] {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 12px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            font-size: 1rem;
-            background-color: #fafafa;
-        }
-        .text-display {
-            font-size: 1.05rem;
-            background: #eef2f5;
-            padding: 12px;
-            border-radius: 6px;
-            letter-spacing: 0.5px;
-            line-height: 1.5;
-            margin-bottom: 12px;
-            word-break: break-all;
-        }
-        textarea {
-            width: 100%;
-            height: 90px;
-            font-size: 1rem;
-            padding: 10px;
-            border: 2px solid #3498db;
-            border-radius: 6px;
-            resize: none;
-            background-color: #fff;
-        }
-        .stats {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 12px;
-            font-weight: bold;
-            font-size: 0.9rem;
-            color: #444;
-            background: #f8f9fa;
-            padding: 8px 12px;
-            border-radius: 6px;
-        }
-        .btn-group {
-            display: flex;
-            gap: 8px;
-            margin-top: 12px;
-        }
-        button {
-            background-color: #3498db;
-            color: white;
-            border: none;
-            padding: 12px 8px;
-            font-size: 0.95rem;
-            font-weight: bold;
-            border-radius: 6px;
-            cursor: pointer;
-            width: 100%;
-            transition: background 0.2s;
-        }
-        button:disabled {
-            background-color: #bdc3c7;
-            cursor: not-allowed;
-        }
-        button.stop-btn {
-            background-color: #e74c3c;
-        }
-        button.reset-btn {
-            background-color: #7f8c8d;
-        }
-        .table-container {
-            overflow-x: auto;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
-            font-size: 0.85rem;
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px 4px;
-            text-align: center;
-        }
-        th {
-            background-color: #3498db;
-            color: white;
-            white-space: nowrap;
-        }
-    </style>
-</head>
-<body>
+import React, { useState, useRef, useMemo, useEffect, useCallback } from "react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from "recharts";
+import {
+  Music2,
+  Keyboard,
+  ArrowRight,
+  Download,
+  Trash2,
+  Home,
+  ClipboardList,
+  CheckCircle2,
+  XCircle,
+} from "lucide-react";
 
-    <h1>タイピング計測アプリ (探究用)</h1>
+/* =========================================================================
+   探究用調査サイト:「タイピング速度と音楽(歌詞)の関係」
+   ------------------------------------------------------------------------
+   ・参加者は「無音 / 歌詞のない音楽 / 歌詞のある音楽」の3条件でタイピングを行う
+   ・各条件のタイピング速度(文字/分)と正確度(%)を記録する
+   ・結果は共有ストレージに保存され、研究者ダッシュボードで集計・CSV出力できる
+   ========================================================================= */
 
-    <div class="card">
-        <label for="subjectName">被験者ID / 名前:</label>
-        <input type="text" id="subjectName" placeholder="例: 被験者A">
+const CONDITIONS = {
+  silent: {
+    key: "silent",
+    label: "無音",
+    short: "無音",
+    color: "#9CA3C4",
+    instruction:
+      "身の回りの音楽・動画を止めて、できるだけ静かな環境を作ってください。イヤホンをしている場合は外してください。",
+  },
+  instrumental: {
+    key: "instrumental",
+    label: "歌詞のない音楽",
+    short: "歌詞なし",
+    color: "#6FCF97",
+    instruction:
+      "お手元の音楽プレーヤーで、歌詞のない曲(クラシック・ローファイ・BGMなど)を再生してください。再生を始めたら、次に進んでください。",
+  },
+  lyrics: {
+    key: "lyrics",
+    label: "歌詞のある音楽",
+    short: "歌詞あり",
+    color: "#E8B04B",
+    instruction:
+      "お手元の音楽プレーヤーで、歌詞のある好きな曲を再生してください。再生を始めたら、次に進んでください。",
+  },
+};
 
-        <label for="musicCondition">音楽の条件:</label>
-        <select id="musicCondition">
-            <option value="無音">1. 無音（コントロール）</option>
-            <option value="日本語歌詞あり">2. 日本語歌詞あり</option>
-            <option value="英語歌詞あり">3. 英語歌詞あり</option>
-            <option value="歌詞なし(BGM)">4. 歌詞なし（BGM/インスト）</option>
-        </select>
-    </div>
+const PASSAGE_POOL = [
+  "駅前の商店街には昔から続く小さな喫茶店があり、常連客が静かに新聞を読んでいる。",
+  "夏休みの図書館は冷房が効いていて、受験生たちが黙々と参考書に向き合っている。",
+  "早朝の公園ではラジオ体操をする高齢者の声が響き、犬を連れた人が挨拶を交わす。",
+  "新しく買ったキーボードは打鍵音が静かで、深夜でも気にせず作業を続けられる。",
+  "山の頂上から見下ろす街並みは思ったより小さく、風が想像以上に強く吹いていた。",
+  "台所からは味噌汁のにおいが漂い、炊飯器が炊き上がりを知らせる音を鳴らした。",
+  "自転車で通り過ぎた田んぼには稲穂が並び、夕方の光を受けて金色に揺れていた。",
+  "文化祭の準備で教室にはペンキの匂いが広がり、生徒たちは笑いながら看板を作った。",
+];
 
-    <div class="card">
-        <div class="text-display" id="textDisplay"></div>
-        <textarea id="typingInput" placeholder="「テスト開始」を押してから入力してください" disabled></textarea>
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
-        <div class="stats">
-            <span>時間: <span id="timer">0</span>秒</span>
-            <span>KPM: <span id="kpm">0</span></span>
-            <span>ミス: <span id="errors">0</span></span>
+function makeParticipantId(nickname) {
+  const suffix = Math.random().toString(36).slice(2, 6);
+  const base = (nickname || "ゲスト").trim() || "ゲスト";
+  return `${base}-${suffix}`;
+}
+
+function toCSV(records) {
+  const header = ["参加者", "条件", "実施順", "CPM(文字/分)", "正確度(%)", "所要時間(秒)", "日時"];
+  const lines = [header.join(",")];
+  records.forEach((r) => {
+    const row = [
+      r.participant,
+      CONDITIONS[r.condition]?.label ?? r.condition,
+      r.orderIndex,
+      r.cpm,
+      r.accuracy,
+      r.elapsedSec,
+      new Date(r.timestamp).toLocaleString("ja-JP"),
+    ].map((v) => `"${String(v).replace(/"/g, '""')}"`);
+    lines.push(row.join(","));
+  });
+  return lines.join("\n");
+}
+
+/* ----------------------------- 円形ゲージ ----------------------------- */
+function RadialGauge({ value, max, label, unit, color }) {
+  const pct = Math.max(0, Math.min(1, value / max));
+  const deg = pct * 360;
+  return (
+    <div className="gauge">
+      <div
+        className="gauge-ring"
+        style={{
+          background: `conic-gradient(${color} ${deg}deg, rgba(255,255,255,0.08) ${deg}deg)`,
+        }}
+      >
+        <div className="gauge-inner">
+          <span className="gauge-value">{value}</span>
+          <span className="gauge-unit">{unit}</span>
         </div>
-        <div class="btn-group">
-            <button id="startBtn" onclick="startTest()">テスト開始</button>
-            <button id="stopBtn" class="stop-btn" onclick="finishTest()" disabled>測定終了</button>
-            <button id="resetBtn" class="reset-btn" onclick="resetTest()" disabled>やり直し</button>
-        </div>
+      </div>
+      <span className="gauge-label">{label}</span>
     </div>
+  );
+}
 
-    <div class="card">
-        <h2 style="font-size: 1.1rem; margin-top:0;">測定結果一覧</h2>
-        <div class="table-container">
-            <table id="resultTable">
-                <thead>
+export default function TypingMusicStudy() {
+  const [screen, setScreen] = useState("home"); // home, register, instruction, typing, trialResult, finished, researcher
+  const [nickname, setNickname] = useState("");
+  const [grade, setGrade] = useState("");
+  const [agreed, setAgreed] = useState(false);
+  const [participantId, setParticipantId] = useState("");
+
+  const [conditionOrder, setConditionOrder] = useState([]);
+  const [assignedPassages, setAssignedPassages] = useState({});
+  const [trialIndex, setTrialIndex] = useState(0);
+  const [trialResults, setTrialResults] = useState([]);
+
+  const [inputValue, setInputValue] = useState("");
+  const [lastTrial, setLastTrial] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
+  const startTimeRef = useRef(null);
+  const keystrokeRef = useRef(0);
+
+  // researcher
+  const [researcherRecords, setResearcherRecords] = useState(null);
+  const [researcherLoading, setResearcherLoading] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  const currentConditionKey = conditionOrder[trialIndex];
+  const currentCondition = currentConditionKey ? CONDITIONS[currentConditionKey] : null;
+  const currentPassage = currentConditionKey ? assignedPassages[currentConditionKey] : "";
+
+  /* ------------------------------- 登録 ------------------------------- */
+  const beginStudy = () => {
+    const order = shuffle(Object.keys(CONDITIONS));
+    const passages = shuffle(PASSAGE_POOL).slice(0, 3);
+    const mapping = {};
+    order.forEach((c, i) => (mapping[c] = passages[i]));
+    setConditionOrder(order);
+    setAssignedPassages(mapping);
+    setParticipantId(makeParticipantId(nickname));
+    setTrialIndex(0);
+    setTrialResults([]);
+    setScreen("instruction");
+  };
+
+  /* ------------------------------ タイピング ------------------------------ */
+  const startTyping = () => {
+    setInputValue("");
+    startTimeRef.current = null;
+    keystrokeRef.current = 0;
+    setScreen("typing");
+  };
+
+  const finalizeTrial = useCallback(
+    async (finalValue) => {
+      const elapsedMs = Date.now() - (startTimeRef.current ?? Date.now());
+      const elapsedSec = Math.max(0.5, elapsedMs / 1000);
+      const cpm = Math.round(currentPassage.length / (elapsedSec / 60));
+      const keystrokes = Math.max(keystrokeRef.current, currentPassage.length);
+      const accuracy = Math.min(100, Math.round((currentPassage.length / keystrokes) * 100));
+
+      const record = {
+        participant: participantId,
+        condition: currentConditionKey,
+        orderIndex: trialIndex + 1,
+        cpm,
+        accuracy,
+        elapsedSec: Math.round(elapsedSec * 10) / 10,
+        passageLength: currentPassage.length,
+        timestamp: Date.now(),
+      };
+
+      setLastTrial(record);
+      setTrialResults((prev) => [...prev, record]);
+      setSaving(true);
+      setSaveError("");
+      try {
+        const key = `trial:${participantId}:${currentConditionKey}:${record.timestamp}`;
+        const result = await window.storage.set(key, JSON.stringify(record), true);
+        if (!result) throw new Error("保存に失敗しました");
+      } catch (e) {
+        setSaveError("データの保存に失敗しました。ネットワークを確認してもう一度お試しください。");
+      } finally {
+        setSaving(false);
+      }
+      setScreen("trialResult");
+    },
+    [currentPassage, currentConditionKey, participantId, trialIndex]
+  );
+
+  const handleInputChange = (e) => {
+    const value = e.target.value;
+    if (value.length > currentPassage.length) return; // 長すぎる入力は無視
+    if (startTimeRef.current === null && value.length > 0) {
+      startTimeRef.current = Date.now();
+    }
+    keystrokeRef.current += 1;
+    setInputValue(value);
+    if (value === currentPassage) {
+      finalizeTrial(value);
+    }
+  };
+
+  const goNextTrial = () => {
+    if (trialIndex + 1 < conditionOrder.length) {
+      setTrialIndex((i) => i + 1);
+      setScreen("instruction");
+    } else {
+      setScreen("finished");
+    }
+  };
+
+  const resetAll = () => {
+    setScreen("home");
+    setNickname("");
+    setGrade("");
+    setAgreed(false);
+    setTrialResults([]);
+    setTrialIndex(0);
+  };
+
+  /* ----------------------------- 研究者ダッシュボード ----------------------------- */
+  const loadResearcherData = useCallback(async () => {
+    setResearcherLoading(true);
+    try {
+      const listRes = await window.storage.list("trial:", true);
+      const keys = listRes?.keys || [];
+      const values = await Promise.all(
+        keys.map((k) => window.storage.get(k, true).catch(() => null))
+      );
+      const records = values.filter(Boolean).map((v) => JSON.parse(v.value));
+      records.sort((a, b) => b.timestamp - a.timestamp);
+      setResearcherRecords(records);
+    } catch (e) {
+      setResearcherRecords([]);
+    } finally {
+      setResearcherLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (screen === "researcher") loadResearcherData();
+  }, [screen, loadResearcherData]);
+
+  const aggregates = useMemo(() => {
+    if (!researcherRecords) return [];
+    return Object.keys(CONDITIONS).map((key) => {
+      const rows = researcherRecords.filter((r) => r.condition === key);
+      const n = rows.length;
+      const avgCpm = n ? Math.round(rows.reduce((s, r) => s + r.cpm, 0) / n) : 0;
+      const avgAcc = n ? Math.round(rows.reduce((s, r) => s + r.accuracy, 0) / n) : 0;
+      return { ...CONDITIONS[key], n, avgCpm, avgAcc };
+    });
+  }, [researcherRecords]);
+
+  const handleExportCSV = () => {
+    if (!researcherRecords || researcherRecords.length === 0) return;
+    const csv = toCSV(researcherRecords);
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "typing_music_data.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleResetData = async () => {
+    setResetting(true);
+    try {
+      const listRes = await window.storage.list("trial:", true);
+      const keys = listRes?.keys || [];
+      await Promise.all(keys.map((k) => window.storage.delete(k, true).catch(() => null)));
+      await loadResearcherData();
+    } finally {
+      setResetting(false);
+      setConfirmReset(false);
+    }
+  };
+
+  /* --------------------------------- 画面 --------------------------------- */
+  return (
+    <div className="tm-root">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+        .tm-root {
+          --bg: #1B1E2B;
+          --surface: #242840;
+          --surface2: #2E3352;
+          --text: #EDEFF7;
+          --muted: #9CA3C4;
+          --accent: #E8B04B;
+          --mint: #6FCF97;
+          --coral: #E8637A;
+          --line: rgba(255,255,255,0.09);
+          min-height: 100vh;
+          background: radial-gradient(1200px 800px at 50% -10%, #2a2f4a 0%, var(--bg) 55%);
+          color: var(--text);
+          font-family: 'Zen Kaku Gothic New', sans-serif;
+          padding: 32px 16px 64px;
+          box-sizing: border-box;
+        }
+        .tm-root * { box-sizing: border-box; }
+        .tm-shell { max-width: 560px; margin: 0 auto; }
+        .tm-shell.wide { max-width: 880px; }
+
+        .tm-nav {
+          display: flex; align-items: center; justify-content: space-between;
+          margin-bottom: 28px; font-size: 13px; color: var(--muted);
+        }
+        .tm-nav-brand { display:flex; align-items:center; gap:8px; letter-spacing: 0.04em; }
+        .tm-nav-link {
+          background: none; border: none; color: var(--muted); cursor: pointer;
+          font-family: inherit; font-size: 13px; display:flex; align-items:center; gap:4px;
+          padding: 4px 0; border-bottom: 1px solid transparent;
+        }
+        .tm-nav-link:hover { color: var(--text); border-bottom-color: var(--line); }
+
+        .tm-eyebrow {
+          font-size: 12px; letter-spacing: 0.14em; color: var(--accent);
+          text-transform: uppercase; margin-bottom: 14px; display:flex; align-items:center; gap:8px;
+        }
+        .tm-title {
+          font-family: 'Shippori Mincho', serif; font-weight: 800;
+          font-size: clamp(28px, 6vw, 42px); line-height: 1.35; margin: 0 0 18px;
+        }
+        .tm-lead { color: var(--muted); font-size: 15.5px; line-height: 1.9; margin: 0 0 28px; }
+
+        .tm-measure {
+          display:flex; gap:0; margin-bottom: 22px; font-family: 'JetBrains Mono', monospace;
+          font-size: 13px; color: var(--muted); align-items:center;
+        }
+        .tm-measure span { padding: 0 10px; }
+        .tm-measure .bar { color: var(--line); }
+        .tm-measure .active { color: var(--accent); font-weight: 600; }
+        .tm-measure .done { color: var(--mint); }
+
+        .tm-card {
+          background: linear-gradient(180deg, var(--surface), var(--surface2));
+          border: 1px solid var(--line);
+          border-radius: 18px;
+          padding: 28px;
+          box-shadow: 0 20px 50px -25px rgba(0,0,0,0.6);
+        }
+
+        .tm-btn {
+          font-family: 'Zen Kaku Gothic New', sans-serif;
+          background: var(--accent); color: #1B1E2B; border: none;
+          border-radius: 999px; padding: 13px 26px; font-size: 15px; font-weight: 700;
+          cursor: pointer; display:inline-flex; align-items:center; gap:8px;
+          transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .tm-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 20px -8px rgba(232,176,75,0.6); }
+        .tm-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .tm-btn:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+        .tm-btn.ghost {
+          background: transparent; color: var(--text); border: 1px solid var(--line);
+        }
+        .tm-btn.danger { background: var(--coral); color: #1B1E2B; }
+
+        .tm-field { margin-bottom: 18px; }
+        .tm-field label { display:block; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+        .tm-field input[type="text"] {
+          width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--line);
+          border-radius: 10px; padding: 12px 14px; color: var(--text); font-size: 15px;
+          font-family: inherit;
+        }
+        .tm-field input:focus-visible { outline: 2px solid var(--accent); }
+
+        .tm-check {
+          display:flex; gap: 10px; align-items:flex-start; font-size: 13.5px; color: var(--muted);
+          line-height: 1.7; margin-bottom: 24px; cursor: pointer;
+        }
+        .tm-check input { margin-top: 3px; accent-color: var(--accent); }
+
+        .tm-condition-badge {
+          display:inline-flex; align-items:center; gap:8px; padding: 6px 14px;
+          border-radius: 999px; background: rgba(255,255,255,0.06); font-size: 13px;
+          border: 1px solid var(--line); margin-bottom: 18px;
+        }
+        .tm-dot { width:8px; height:8px; border-radius:50%; }
+
+        .tm-instruction-text { font-size: 15.5px; line-height: 1.95; color: var(--text); margin-bottom: 26px; }
+
+        .tm-passage {
+          font-family: 'JetBrains Mono', 'Zen Kaku Gothic New', monospace;
+          font-size: 18px; line-height: 2.1; letter-spacing: 0.01em;
+          padding: 20px; background: rgba(0,0,0,0.25); border-radius: 12px;
+          border: 1px solid var(--line); margin-bottom: 18px; word-break: break-all;
+        }
+        .char-pending { color: var(--muted); }
+        .char-correct { color: var(--mint); }
+        .char-wrong { color: var(--coral); text-decoration: underline; }
+        .char-caret { background: var(--accent); color: #1B1E2B; border-radius: 2px; }
+        @media (prefers-reduced-motion: no-preference) {
+          .char-caret { animation: tm-pulse 1s ease-in-out infinite; }
+        }
+        @keyframes tm-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+
+        .tm-typing-input {
+          width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--line);
+          border-radius: 12px; padding: 14px 16px; color: var(--text);
+          font-family: 'JetBrains Mono', monospace; font-size: 16px; margin-bottom: 20px;
+        }
+        .tm-typing-input:focus-visible { outline: 2px solid var(--accent); }
+
+        .tm-meta-row { display:flex; justify-content: space-between; font-size: 12.5px; color: var(--muted); margin-bottom: 10px; font-family: 'JetBrains Mono', monospace; }
+
+        .gauge { display:flex; flex-direction: column; align-items:center; gap: 10px; }
+        .gauge-ring {
+          width: 148px; height: 148px; border-radius: 50%; display:flex; align-items:center; justify-content:center;
+        }
+        .gauge-inner {
+          width: 118px; height: 118px; border-radius: 50%; background: var(--bg);
+          display:flex; flex-direction: column; align-items:center; justify-content:center;
+        }
+        .gauge-value { font-family: 'Shippori Mincho', serif; font-size: 30px; font-weight: 800; }
+        .gauge-unit { font-size: 11px; color: var(--muted); margin-top: 2px; }
+        .gauge-label { font-size: 13px; color: var(--muted); }
+
+        .tm-result-grid { display:flex; justify-content: center; gap: 28px; margin: 26px 0 30px; flex-wrap: wrap; }
+
+        .tm-summary-row {
+          display:flex; align-items:center; justify-content: space-between;
+          padding: 14px 4px; border-bottom: 1px solid var(--line); gap: 12px;
+        }
+        .tm-summary-row:last-child { border-bottom: none; }
+        .tm-summary-label { display:flex; align-items:center; gap:10px; font-size: 14.5px; }
+        .tm-summary-values { display:flex; gap: 18px; font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--muted); }
+        .tm-summary-values b { color: var(--text); font-size: 16px; }
+
+        .tm-stat-cards { display:grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 14px; margin-bottom: 28px; }
+        .tm-stat-card { background: rgba(255,255,255,0.04); border:1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+        .tm-stat-card .n { font-family: 'JetBrains Mono', monospace; color: var(--muted); font-size: 12px; }
+        .tm-stat-card .label { display:flex; align-items:center; gap:8px; font-size: 13.5px; margin-bottom: 10px; }
+        .tm-stat-card .value { font-family: 'Shippori Mincho', serif; font-size: 26px; font-weight: 800; }
+        .tm-stat-card .value small { font-size: 13px; color: var(--muted); font-weight: 400; margin-left: 4px; }
+
+        .tm-chart-block { margin-bottom: 30px; }
+        .tm-chart-title { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+
+        .tm-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 24px; }
+        .tm-table { width: 100%; border-collapse: collapse; font-size: 13px; font-family: 'JetBrains Mono', monospace; }
+        .tm-table th, .tm-table td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+        .tm-table th { color: var(--muted); font-family: 'Zen Kaku Gothic New', sans-serif; font-weight: 500; background: rgba(255,255,255,0.03); }
+        .tm-table tr:last-child td { border-bottom: none; }
+
+        .tm-actions { display:flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+        .tm-error { color: var(--coral); font-size: 13px; margin-top: 10px; }
+        .tm-empty { color: var(--muted); font-size: 14px; padding: 20px 0; text-align:center; }
+
+        .tm-confirm-box { background: rgba(232,99,122,0.1); border: 1px solid var(--coral); border-radius: 12px; padding: 16px; margin-bottom: 20px; font-size: 13.5px; }
+      `}</style>
+
+      {/* ---------------------------- ホーム ---------------------------- */}
+      {screen === "home" && (
+        <div className="tm-shell">
+          <div className="tm-nav">
+            <div className="tm-nav-brand">
+              <Music2 size={15} />
+              探究:タイピング × 音楽
+            </div>
+            <button className="tm-nav-link" onClick={() => setScreen("researcher")}>
+              研究者用ダッシュボード <ArrowRight size={13} />
+            </button>
+          </div>
+
+          <div className="tm-eyebrow">
+            <Keyboard size={14} /> 調査への協力依頼
+          </div>
+          <h1 className="tm-title">歌詞は、指を止める?</h1>
+          <p className="tm-lead">
+            音楽を聴きながら作業すると集中できる人もいれば、歌詞が気になって手が止まる人もいます。
+            この調査では「無音」「歌詞のない音楽」「歌詞のある音楽」の3つの条件でそれぞれ短い文章をタイピングしてもらい、
+            入力速度(CPM・1分あたりの文字数)と正確度の変化を記録します。所要時間は3分ほどです。
+          </p>
+          <div className="tm-card">
+            <p style={{ margin: "0 0 20px", fontSize: 14, color: "var(--muted)", lineHeight: 1.8 }}>
+              音楽の再生はご自身のスマートフォンやプレーヤーで行ってください。このサイトは指示の表示とタイピング測定のみを行います。
+            </p>
+            <button className="tm-btn" onClick={() => setScreen("register")}>
+              調査に協力する <ArrowRight size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------- 参加者登録 ---------------------------- */}
+      {screen === "register" && (
+        <div className="tm-shell">
+          <div className="tm-eyebrow">
+            <ClipboardList size={14} /> 参加者情報
+          </div>
+          <h1 className="tm-title" style={{ fontSize: 30 }}>
+            はじめる前に
+          </h1>
+          <div className="tm-card">
+            <div className="tm-field">
+              <label>ニックネーム(本名でなくてOK)</label>
+              <input
+                type="text"
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value)}
+                placeholder="例:たけし"
+              />
+            </div>
+            <div className="tm-field">
+              <label>学年・立場(任意)</label>
+              <input
+                type="text"
+                value={grade}
+                onChange={(e) => setGrade(e.target.value)}
+                placeholder="例:高校2年"
+              />
+            </div>
+            <label className="tm-check">
+              <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
+              入力したニックネームとタイピング結果は、探究学習の分析目的のみに使用され、他の参加者にも集計データとして共有されることに同意します。
+            </label>
+            <div className="tm-actions">
+              <button className="tm-btn" disabled={!agreed} onClick={beginStudy}>
+                次へ <ArrowRight size={16} />
+              </button>
+              <button className="tm-btn ghost" onClick={() => setScreen("home")}>
+                戻る
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------- 条件の指示 ---------------------------- */}
+      {screen === "instruction" && currentCondition && (
+        <div className="tm-shell">
+          <div className="tm-measure">
+            {conditionOrder.map((c, i) => (
+              <React.Fragment key={c}>
+                {i > 0 && <span className="bar">｜</span>}
+                <span className={i < trialIndex ? "done" : i === trialIndex ? "active" : ""}>
+                  {i + 1}
+                </span>
+              </React.Fragment>
+            ))}
+            <span style={{ marginLeft: 10 }}>/ 全{conditionOrder.length}条件</span>
+          </div>
+
+          <div
+            className="tm-condition-badge"
+            style={{ borderColor: currentCondition.color }}
+          >
+            <span className="tm-dot" style={{ background: currentCondition.color }} />
+            条件 {trialIndex + 1}:{currentCondition.label}
+          </div>
+
+          <h1 className="tm-title" style={{ fontSize: 28 }}>
+            準備ができたら開始してください
+          </h1>
+
+          <div className="tm-card">
+            <p className="tm-instruction-text">{currentCondition.instruction}</p>
+            <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 24 }}>
+              開始すると短い日本語の文章が表示されます。表示された文章を、できるだけ速く・正確に入力してください。
+            </p>
+            <button className="tm-btn" onClick={startTyping}>
+              タイピングを開始 <ArrowRight size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------- タイピング画面 ---------------------------- */}
+      {screen === "typing" && currentCondition && (
+        <div className="tm-shell">
+          <div
+            className="tm-condition-badge"
+            style={{ borderColor: currentCondition.color }}
+          >
+            <span className="tm-dot" style={{ background: currentCondition.color }} />
+            条件 {trialIndex + 1}:{currentCondition.label}
+          </div>
+          <div className="tm-meta-row">
+            <span>{inputValue.length} / {currentPassage.length} 文字</span>
+            <span>正しく最後まで入力すると自動で終了します</span>
+          </div>
+          <div className="tm-passage">
+            {currentPassage.split("").map((ch, i) => {
+              let cls = "char-pending";
+              if (i < inputValue.length) cls = inputValue[i] === ch ? "char-correct" : "char-wrong";
+              else if (i === inputValue.length) cls = "char-caret";
+              return (
+                <span key={i} className={cls}>
+                  {ch}
+                </span>
+              );
+            })}
+          </div>
+          <input
+            className="tm-typing-input"
+            type="text"
+            value={inputValue}
+            onChange={handleInputChange}
+            onPaste={(e) => e.preventDefault()}
+            autoFocus
+            placeholder="ここに入力してください"
+          />
+        </div>
+      )}
+
+      {/* ---------------------------- 1条件ごとの結果 ---------------------------- */}
+      {screen === "trialResult" && lastTrial && (
+        <div className="tm-shell">
+          <div className="tm-eyebrow">
+            <CheckCircle2 size={14} /> 条件 {lastTrial.orderIndex} 完了
+          </div>
+          <h1 className="tm-title" style={{ fontSize: 28 }}>
+            {CONDITIONS[lastTrial.condition].label} の結果
+          </h1>
+          <div className="tm-card">
+            <div className="tm-result-grid">
+              <RadialGauge
+                value={lastTrial.cpm}
+                max={400}
+                label="タイピング速度"
+                unit="文字/分"
+                color={CONDITIONS[lastTrial.condition].color}
+              />
+              <RadialGauge
+                value={lastTrial.accuracy}
+                max={100}
+                label="正確度"
+                unit="%"
+                color="var(--mint)"
+              />
+            </div>
+            {saving && <p style={{ fontSize: 13, color: "var(--muted)" }}>保存中…</p>}
+            {saveError && <p className="tm-error">{saveError}</p>}
+            <button className="tm-btn" onClick={goNextTrial}>
+              {trialIndex + 1 < conditionOrder.length ? "次の条件へ" : "結果を確認する"}
+              <ArrowRight size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------- 全条件終了 ---------------------------- */}
+      {screen === "finished" && (
+        <div className="tm-shell">
+          <div className="tm-eyebrow">
+            <CheckCircle2 size={14} /> 調査完了
+          </div>
+          <h1 className="tm-title" style={{ fontSize: 30 }}>
+            ご協力ありがとうございました
+          </h1>
+          <p className="tm-lead">
+            3つの条件すべてのタイピング結果を記録しました。あなたのデータは研究者ダッシュボードの集計に反映されます。
+          </p>
+          <div className="tm-card">
+            {trialResults
+              .slice()
+              .sort((a, b) => a.orderIndex - b.orderIndex)
+              .map((r) => (
+                <div className="tm-summary-row" key={r.orderIndex}>
+                  <div className="tm-summary-label">
+                    <span className="tm-dot" style={{ background: CONDITIONS[r.condition].color }} />
+                    {CONDITIONS[r.condition].label}
+                  </div>
+                  <div className="tm-summary-values">
+                    <span><b>{r.cpm}</b> 文字/分</span>
+                    <span><b>{r.accuracy}</b>%</span>
+                  </div>
+                </div>
+              ))}
+            <div className="tm-actions" style={{ marginTop: 22 }}>
+              <button className="tm-btn" onClick={resetAll}>
+                <Home size={16} /> もう一度別の人が回答する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------- 研究者ダッシュボード ---------------------------- */}
+      {screen === "researcher" && (
+        <div className="tm-shell wide">
+          <div className="tm-nav">
+            <div className="tm-nav-brand">
+              <ClipboardList size={15} /> 研究者用ダッシュボード
+            </div>
+            <button className="tm-nav-link" onClick={() => setScreen("home")}>
+              <Home size={13} /> ホームへ
+            </button>
+          </div>
+
+          <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 24 }}>
+            ここに表示されるデータは、このサイトを使った全参加者の回答が集計されたものです(共有ストレージ)。
+          </p>
+
+          {researcherLoading && <p className="tm-empty">読み込み中…</p>}
+
+          {!researcherLoading && researcherRecords && researcherRecords.length === 0 && (
+            <p className="tm-empty">まだデータがありません。参加者にホーム画面から回答してもらいましょう。</p>
+          )}
+
+          {!researcherLoading && researcherRecords && researcherRecords.length > 0 && (
+            <>
+              <div className="tm-stat-cards">
+                {aggregates.map((a) => (
+                  <div className="tm-stat-card" key={a.key}>
+                    <div className="label">
+                      <span className="tm-dot" style={{ background: a.color }} />
+                      {a.label}
+                    </div>
+                    <div className="value">
+                      {a.avgCpm}
+                      <small>文字/分</small>
+                    </div>
+                    <div className="value" style={{ fontSize: 18, marginTop: 4 }}>
+                      {a.avgAcc}
+                      <small>% 正確度</small>
+                    </div>
+                    <div className="n">n={a.n}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="tm-chart-block">
+                <div className="tm-chart-title">条件別 平均タイピング速度(文字/分)</div>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={aggregates} margin={{ left: -10 }}>
+                    <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
+                    <XAxis dataKey="short" stroke="#9CA3C4" fontSize={12} />
+                    <YAxis stroke="#9CA3C4" fontSize={12} />
+                    <Tooltip
+                      contentStyle={{ background: "#242840", border: "1px solid rgba(255,255,255,0.1)" }}
+                      labelStyle={{ color: "#EDEFF7" }}
+                    />
+                    <Bar dataKey="avgCpm" radius={[6, 6, 0, 0]}>
+                      {aggregates.map((a) => (
+                        <Cell key={a.key} fill={a.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="tm-chart-block">
+                <div className="tm-chart-title">条件別 平均正確度(%)</div>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={aggregates} margin={{ left: -10 }}>
+                    <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
+                    <XAxis dataKey="short" stroke="#9CA3C4" fontSize={12} />
+                    <YAxis stroke="#9CA3C4" fontSize={12} domain={[0, 100]} />
+                    <Tooltip
+                      contentStyle={{ background: "#242840", border: "1px solid rgba(255,255,255,0.1)" }}
+                      labelStyle={{ color: "#EDEFF7" }}
+                    />
+                    <Bar dataKey="avgAcc" radius={[6, 6, 0, 0]}>
+                      {aggregates.map((a) => (
+                        <Cell key={a.key} fill={a.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="tm-table-wrap">
+                <table className="tm-table">
+                  <thead>
                     <tr>
-                        <th>被験者</th>
-                        <th>条件</th>
-                        <th>秒</th>
-                        <th>KPM</th>
-                        <th>ミス</th>
+                      <th>参加者</th>
+                      <th>条件</th>
+                      <th>CPM</th>
+                      <th>正確度</th>
+                      <th>時間(秒)</th>
+                      <th>日時</th>
                     </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
+                  </thead>
+                  <tbody>
+                    {researcherRecords.map((r, i) => (
+                      <tr key={i}>
+                        <td>{r.participant}</td>
+                        <td>{CONDITIONS[r.condition]?.label}</td>
+                        <td>{r.cpm}</td>
+                        <td>{r.accuracy}%</td>
+                        <td>{r.elapsedSec}</td>
+                        <td>{new Date(r.timestamp).toLocaleString("ja-JP")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="tm-actions">
+                <button className="tm-btn" onClick={handleExportCSV}>
+                  <Download size={16} /> CSVをダウンロード
+                </button>
+                <button className="tm-btn ghost" onClick={loadResearcherData}>
+                  再読み込み
+                </button>
+                <button className="tm-btn danger" onClick={() => setConfirmReset(true)}>
+                  <Trash2 size={16} /> 全データを削除
+                </button>
+              </div>
+
+              {confirmReset && (
+                <div className="tm-confirm-box" style={{ marginTop: 18 }}>
+                  <p style={{ margin: "0 0 12px" }}>
+                    <XCircle size={14} style={{ verticalAlign: "-2px", marginRight: 6 }} />
+                    本当にすべてのデータを削除しますか?この操作は取り消せません。
+                  </p>
+                  <div className="tm-actions">
+                    <button className="tm-btn danger" disabled={resetting} onClick={handleResetData}>
+                      {resetting ? "削除中…" : "削除する"}
+                    </button>
+                    <button className="tm-btn ghost" onClick={() => setConfirmReset(false)}>
+                      キャンセル
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
-        <button onclick="downloadCSV()" style="background-color: #27ae60; margin-top: 12px;">CSV保存（Excel用）</button>
+      )}
     </div>
-
-    <script>
-        const targetText = "kyouha iitenkidenode sanponi ikimashou. atarashii hakkenga arumoshiremasen.";
-        const displayText = "きょうは いいてんきなので さんぽに いきましょう。 あたらしい はっけんが あるかもしれません。";
-        
-        let timerInterval = null;
-        let startTime = null;
-        let isStarted = false;
-        let errorCount = 0;
-        let results = [];
-
-        const displayEl = document.getElementById("textDisplay");
-        const inputEl = document.getElementById("typingInput");
-        const timerEl = document.getElementById("timer");
-        const kpmEl = document.getElementById("kpm");
-        const errorEl = document.getElementById("errors");
-
-        function init() {
-            displayEl.innerText = displayText + "\n(ローマ字: " + targetText + ")";
-        }
-
-        function startTest() {
-            inputEl.value = "";
-            inputEl.disabled = false;
-            inputEl.focus();
-            isStarted = true;
-            errorCount = 0;
-            errorEl.innerText = "0";
-            kpmEl.innerText = "0";
-            timerEl.innerText = "0";
-            
-            startTime = new Date();
-            clearInterval(timerInterval);
-            timerInterval = setInterval(updateTimer, 100);
-            
-            document.getElementById("startBtn").innerText = "計測中...";
-            document.getElementById("startBtn").disabled = true;
-            document.getElementById("stopBtn").disabled = false;
-            document.getElementById("resetBtn").disabled = false;
-        }
-
-        function updateTimer() {
-            const now = new Date();
-            const elapsed = ((now - startTime) / 1000).toFixed(1);
-            timerEl.innerText = elapsed;
-        }
-
-        inputEl.addEventListener("input", () => {
-            if (!isStarted) return;
-
-            const typed = inputEl.value;
-            
-            if (!targetText.startsWith(typed)) {
-                errorCount++;
-                errorEl.innerText = errorCount;
-            }
-
-            const elapsedMinutes = (new Date() - startTime) / 1000 / 60;
-            if (elapsedMinutes > 0) {
-                const currentKpm = Math.round(typed.length / elapsedMinutes);
-                kpmEl.innerText = currentKpm;
-            }
-
-            if (typed === targetText) {
-                finishTest();
-            }
-        });
-
-        function finishTest() {
-            if (!isStarted) return;
-
-            clearInterval(timerInterval);
-            isStarted = false;
-            inputEl.disabled = true;
-
-            const endTime = new Date();
-            const totalTime = ((endTime - startTime) / 1000).toFixed(2);
-            const typedLength = inputEl.value.length;
-            const finalKpm = totalTime > 0 ? Math.round(typedLength / (totalTime / 60)) : 0;
-
-            const name = document.getElementById("subjectName").value || "匿名";
-            const condition = document.getElementById("musicCondition").value;
-
-            const resultData = { name, condition, time: totalTime, kpm: finalKpm, errors: errorCount };
-            results.push(resultData);
-
-            const tbody = document.querySelector("#resultTable tbody");
-            const row = `<tr>
-                <td>${name}</td>
-                <td>${condition}</td>
-                <td>${totalTime}</td>
-                <td>${finalKpm}</td>
-                <td>${errorCount}</td>
-            </tr>`;
-            tbody.insertAdjacentHTML("beforeend", row);
-
-            alert(`計測完了！\nタイム: ${totalTime}秒\nKPM: ${finalKpm}`);
-            
-            resetButtons();
-        }
-
-        function resetTest() {
-            clearInterval(timerInterval);
-            isStarted = false;
-            inputEl.value = "";
-            inputEl.disabled = true;
-            timerEl.innerText = "0";
-            kpmEl.innerText = "0";
-            errorEl.innerText = "0";
-            resetButtons();
-        }
-
-        function resetButtons() {
-            document.getElementById("startBtn").innerText = "テスト開始";
-            document.getElementById("startBtn").disabled = false;
-            document.getElementById("stopBtn").disabled = true;
-            document.getElementById("resetBtn").disabled = true;
-        }
-
-        function downloadCSV() {
-            if (results.length === 0) {
-                alert("出力するデータがありません。");
-                return;
-            }
-            let csvContent = "data:text/csv;charset=utf-8,被験者,条件,時間(秒),KPM,ミス数\n";
-            results.forEach(r => {
-                csvContent += `${r.name},${r.condition},${r.time},${r.kpm},${r.errors}\n`;
-            });
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", "typing_experiment_results.csv");
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-
-        init();
-    </script>
-</body>
-</html>
+  );
+}
