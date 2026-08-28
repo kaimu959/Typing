@@ -1,32 +1,120 @@
-import React, { useState, useRef, useMemo, useEffect, useCallback } from "react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-} from "recharts";
-import {
-  Music2,
-  Keyboard,
-  ArrowRight,
-  Download,
-  Trash2,
-  Home,
-  ClipboardList,
-  CheckCircle2,
-  XCircle,
-} from "lucide-react";
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>探究:タイピング × 音楽</title>
+
+<!-- React / ReactDOM (ブラウザで直接動かすための版) -->
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<!-- JSXをブラウザ上でその場で変換してくれるツール -->
+<script src="https://unpkg.com/@babel/standalone/babel.min.js" crossorigin></script>
+</head>
+<body style="margin:0;">
+<div id="root"></div>
+
+<script>
+/* =========================================================================
+   このサイト専用の簡易ストレージ(localStorage を使用)
+   ------------------------------------------------------------------------
+   もともとのコードにあった window.storage は、Claude のアーティファクト機能
+   専用のAPIで、GitHub Pagesなど外部のサイトには存在しません。
+   ここでは同じ形の関数(get/set/delete/list)を、ブラウザの localStorage を
+   使って自作しています。
+
+   ★重要な制限:localStorage は「今開いているその端末・そのブラウザの中」
+   にしかデータを保存できません。友達が自分のスマホでこのページを開いて
+   回答しても、あなたのパソコンには届きません。複数人のデータを1か所に
+   集めたい場合は、別の仕組み(Googleスプレッドシート連携など)が必要です。
+   ========================================================================= */
+(function () {
+  function fullKey(key, shared) {
+    return (shared ? "shared::" : "priv::") + key;
+  }
+  window.storage = {
+    get: async function (key, shared) {
+      const raw = localStorage.getItem(fullKey(key, shared));
+      if (raw === null) {
+        throw new Error("not found: " + key);
+      }
+      return { key: key, value: raw, shared: !!shared };
+    },
+    set: async function (key, value, shared) {
+      localStorage.setItem(fullKey(key, shared), value);
+      return { key: key, value: value, shared: !!shared };
+    },
+    delete: async function (key, shared) {
+      localStorage.removeItem(fullKey(key, shared));
+      return { key: key, deleted: true, shared: !!shared };
+    },
+    list: async function (prefix, shared) {
+      const p = shared ? "shared::" : "priv::";
+      const fullPrefix = p + (prefix || "");
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.indexOf(fullPrefix) === 0) {
+          keys.push(k.slice(p.length));
+        }
+      }
+      return { keys: keys, prefix: prefix, shared: !!shared };
+    },
+  };
+})();
+</script>
+
+<script type="text/babel">
+const { useState, useRef, useMemo, useEffect, useCallback } = React;
+
+/* ---------------------------------------------------------------------
+   アイコンの代わり(絵文字)。元コードは lucide-react を使っていましたが、
+   外部ライブラリなしで動かすため、シンプルな絵文字に置き換えています。
+   --------------------------------------------------------------------- */
+function Ic({ e, size = 14, style }) {
+  return (
+    <span style={{ fontSize: size, lineHeight: 1, display: "inline-flex", ...style }}>
+      {e}
+    </span>
+  );
+}
+
+/* ---------------------------------------------------------------------
+   シンプルな自作バーチャート(元コードは recharts を使っていましたが、
+   外部ライブラリなしで動かすため、divベースの棒グラフに置き換えています)
+   --------------------------------------------------------------------- */
+function SimpleBarChart({ data, valueKey, maxValue, unit }) {
+  return (
+    <div className="tm-bars">
+      {data.map((d) => {
+        const val = d[valueKey];
+        const pct = maxValue > 0 ? Math.min(100, (val / maxValue) * 100) : 0;
+        return (
+          <div className="tm-bar-col" key={d.key}>
+            <div className="tm-bar-track">
+              <div
+                className="tm-bar-fill"
+                style={{ height: pct + "%", background: d.color }}
+              />
+            </div>
+            <div className="tm-bar-value">
+              {val}
+              <span style={{ color: "var(--muted)", fontSize: 11 }}>{unit}</span>
+            </div>
+            <div className="tm-bar-label">{d.short}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 /* =========================================================================
    探究用調査サイト:「タイピング速度と音楽(歌詞)の関係」
    ------------------------------------------------------------------------
    ・参加者は「無音 / 歌詞のない音楽 / 歌詞のある音楽」の3条件でタイピングを行う
    ・各条件のタイピング速度(文字/分)と正確度(%)を記録する
-   ・結果は共有ストレージに保存され、研究者ダッシュボードで集計・CSV出力できる
+   ・結果はブラウザ内ストレージに保存され、研究者ダッシュボードで集計・CSV出力できる
    ========================================================================= */
 
 const CONDITIONS = {
@@ -122,7 +210,7 @@ function RadialGauge({ value, max, label, unit, color }) {
   );
 }
 
-export default function TypingMusicStudy() {
+function TypingMusicStudy() {
   const [screen, setScreen] = useState("home"); // home, register, instruction, typing, trialResult, finished, researcher
   const [nickname, setNickname] = useState("");
   const [grade, setGrade] = useState("");
@@ -202,7 +290,7 @@ export default function TypingMusicStudy() {
         const result = await window.storage.set(key, JSON.stringify(record), true);
         if (!result) throw new Error("保存に失敗しました");
       } catch (e) {
-        setSaveError("データの保存に失敗しました。ネットワークを確認してもう一度お試しください。");
+        setSaveError("データの保存に失敗しました。ブラウザの設定を確認してもう一度お試しください。");
       } finally {
         setSaving(false);
       }
@@ -275,6 +363,11 @@ export default function TypingMusicStudy() {
       return { ...CONDITIONS[key], n, avgCpm, avgAcc };
     });
   }, [researcherRecords]);
+
+  const maxCpm = useMemo(() => {
+    const m = Math.max(1, ...aggregates.map((a) => a.avgCpm));
+    return Math.ceil(m * 1.2);
+  }, [aggregates]);
 
   const handleExportCSV = () => {
     if (!researcherRecords || researcherRecords.length === 0) return;
@@ -463,7 +556,14 @@ export default function TypingMusicStudy() {
         .tm-stat-card .value small { font-size: 13px; color: var(--muted); font-weight: 400; margin-left: 4px; }
 
         .tm-chart-block { margin-bottom: 30px; }
-        .tm-chart-title { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+        .tm-chart-title { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+
+        .tm-bars { display:flex; align-items:flex-end; justify-content:center; gap: 28px; height: 200px; }
+        .tm-bar-col { display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; width:64px; }
+        .tm-bar-track { flex:1; width:36px; display:flex; align-items:flex-end; background: rgba(255,255,255,0.05); border-radius:6px; overflow:hidden; }
+        .tm-bar-fill { width:100%; border-radius:6px 6px 0 0; transition: height 0.4s ease; }
+        .tm-bar-value { margin-top:8px; font-family:'JetBrains Mono',monospace; font-size:13px; }
+        .tm-bar-label { margin-top:4px; font-size:12px; color:var(--muted); }
 
         .tm-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 24px; }
         .tm-table { width: 100%; border-collapse: collapse; font-size: 13px; font-family: 'JetBrains Mono', monospace; }
@@ -476,6 +576,8 @@ export default function TypingMusicStudy() {
         .tm-empty { color: var(--muted); font-size: 14px; padding: 20px 0; text-align:center; }
 
         .tm-confirm-box { background: rgba(232,99,122,0.1); border: 1px solid var(--coral); border-radius: 12px; padding: 16px; margin-bottom: 20px; font-size: 13.5px; }
+
+        .tm-note { background: rgba(232,176,75,0.08); border: 1px solid rgba(232,176,75,0.3); border-radius: 12px; padding: 14px 16px; font-size: 13px; color: var(--muted); margin-bottom: 24px; line-height: 1.7; }
       `}</style>
 
       {/* ---------------------------- ホーム ---------------------------- */}
@@ -483,16 +585,16 @@ export default function TypingMusicStudy() {
         <div className="tm-shell">
           <div className="tm-nav">
             <div className="tm-nav-brand">
-              <Music2 size={15} />
+              <Ic e="🎵" size={15} />
               探究:タイピング × 音楽
             </div>
             <button className="tm-nav-link" onClick={() => setScreen("researcher")}>
-              研究者用ダッシュボード <ArrowRight size={13} />
+              研究者用ダッシュボード <Ic e="→" size={13} />
             </button>
           </div>
 
           <div className="tm-eyebrow">
-            <Keyboard size={14} /> 調査への協力依頼
+            <Ic e="⌨️" size={14} /> 調査への協力依頼
           </div>
           <h1 className="tm-title">歌詞は、指を止める?</h1>
           <p className="tm-lead">
@@ -505,7 +607,7 @@ export default function TypingMusicStudy() {
               音楽の再生はご自身のスマートフォンやプレーヤーで行ってください。このサイトは指示の表示とタイピング測定のみを行います。
             </p>
             <button className="tm-btn" onClick={() => setScreen("register")}>
-              調査に協力する <ArrowRight size={16} />
+              調査に協力する <Ic e="→" size={16} />
             </button>
           </div>
         </div>
@@ -515,7 +617,7 @@ export default function TypingMusicStudy() {
       {screen === "register" && (
         <div className="tm-shell">
           <div className="tm-eyebrow">
-            <ClipboardList size={14} /> 参加者情報
+            <Ic e="📋" size={14} /> 参加者情報
           </div>
           <h1 className="tm-title" style={{ fontSize: 30 }}>
             はじめる前に
@@ -545,7 +647,7 @@ export default function TypingMusicStudy() {
             </label>
             <div className="tm-actions">
               <button className="tm-btn" disabled={!agreed} onClick={beginStudy}>
-                次へ <ArrowRight size={16} />
+                次へ <Ic e="→" size={16} />
               </button>
               <button className="tm-btn ghost" onClick={() => setScreen("home")}>
                 戻る
@@ -588,7 +690,7 @@ export default function TypingMusicStudy() {
               開始すると短い日本語の文章が表示されます。表示された文章を、できるだけ速く・正確に入力してください。
             </p>
             <button className="tm-btn" onClick={startTyping}>
-              タイピングを開始 <ArrowRight size={16} />
+              タイピングを開始 <Ic e="→" size={16} />
             </button>
           </div>
         </div>
@@ -636,7 +738,7 @@ export default function TypingMusicStudy() {
       {screen === "trialResult" && lastTrial && (
         <div className="tm-shell">
           <div className="tm-eyebrow">
-            <CheckCircle2 size={14} /> 条件 {lastTrial.orderIndex} 完了
+            <Ic e="✅" size={14} /> 条件 {lastTrial.orderIndex} 完了
           </div>
           <h1 className="tm-title" style={{ fontSize: 28 }}>
             {CONDITIONS[lastTrial.condition].label} の結果
@@ -662,7 +764,7 @@ export default function TypingMusicStudy() {
             {saveError && <p className="tm-error">{saveError}</p>}
             <button className="tm-btn" onClick={goNextTrial}>
               {trialIndex + 1 < conditionOrder.length ? "次の条件へ" : "結果を確認する"}
-              <ArrowRight size={16} />
+              <Ic e="→" size={16} />
             </button>
           </div>
         </div>
@@ -672,7 +774,7 @@ export default function TypingMusicStudy() {
       {screen === "finished" && (
         <div className="tm-shell">
           <div className="tm-eyebrow">
-            <CheckCircle2 size={14} /> 調査完了
+            <Ic e="✅" size={14} /> 調査完了
           </div>
           <h1 className="tm-title" style={{ fontSize: 30 }}>
             ご協力ありがとうございました
@@ -698,7 +800,7 @@ export default function TypingMusicStudy() {
               ))}
             <div className="tm-actions" style={{ marginTop: 22 }}>
               <button className="tm-btn" onClick={resetAll}>
-                <Home size={16} /> もう一度別の人が回答する
+                <Ic e="🏠" size={16} /> もう一度別の人が回答する
               </button>
             </div>
           </div>
@@ -710,16 +812,18 @@ export default function TypingMusicStudy() {
         <div className="tm-shell wide">
           <div className="tm-nav">
             <div className="tm-nav-brand">
-              <ClipboardList size={15} /> 研究者用ダッシュボード
+              <Ic e="📋" size={15} /> 研究者用ダッシュボード
             </div>
             <button className="tm-nav-link" onClick={() => setScreen("home")}>
-              <Home size={13} /> ホームへ
+              <Ic e="🏠" size={13} /> ホームへ
             </button>
           </div>
 
-          <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 24 }}>
-            ここに表示されるデータは、このサイトを使った全参加者の回答が集計されたものです(共有ストレージ)。
-          </p>
+          <div className="tm-note">
+            <Ic e="⚠️" size={13} /> このダッシュボードは「今あなたが開いているこのブラウザ」に保存されたデータだけを表示します。
+            友達が自分のスマホやパソコンでこのページを開いて回答しても、そのデータはここには出てきません
+            (複数の端末からデータを1か所に集めるには、別の仕組みが必要です)。
+          </div>
 
           {researcherLoading && <p className="tm-empty">読み込み中…</p>}
 
@@ -751,42 +855,12 @@ export default function TypingMusicStudy() {
 
               <div className="tm-chart-block">
                 <div className="tm-chart-title">条件別 平均タイピング速度(文字/分)</div>
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={aggregates} margin={{ left: -10 }}>
-                    <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
-                    <XAxis dataKey="short" stroke="#9CA3C4" fontSize={12} />
-                    <YAxis stroke="#9CA3C4" fontSize={12} />
-                    <Tooltip
-                      contentStyle={{ background: "#242840", border: "1px solid rgba(255,255,255,0.1)" }}
-                      labelStyle={{ color: "#EDEFF7" }}
-                    />
-                    <Bar dataKey="avgCpm" radius={[6, 6, 0, 0]}>
-                      {aggregates.map((a) => (
-                        <Cell key={a.key} fill={a.color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                <SimpleBarChart data={aggregates} valueKey="avgCpm" maxValue={maxCpm} unit="" />
               </div>
 
               <div className="tm-chart-block">
                 <div className="tm-chart-title">条件別 平均正確度(%)</div>
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={aggregates} margin={{ left: -10 }}>
-                    <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
-                    <XAxis dataKey="short" stroke="#9CA3C4" fontSize={12} />
-                    <YAxis stroke="#9CA3C4" fontSize={12} domain={[0, 100]} />
-                    <Tooltip
-                      contentStyle={{ background: "#242840", border: "1px solid rgba(255,255,255,0.1)" }}
-                      labelStyle={{ color: "#EDEFF7" }}
-                    />
-                    <Bar dataKey="avgAcc" radius={[6, 6, 0, 0]}>
-                      {aggregates.map((a) => (
-                        <Cell key={a.key} fill={a.color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                <SimpleBarChart data={aggregates} valueKey="avgAcc" maxValue={100} unit="%" />
               </div>
 
               <div className="tm-table-wrap">
@@ -818,20 +892,20 @@ export default function TypingMusicStudy() {
 
               <div className="tm-actions">
                 <button className="tm-btn" onClick={handleExportCSV}>
-                  <Download size={16} /> CSVをダウンロード
+                  <Ic e="⬇️" size={16} /> CSVをダウンロード
                 </button>
                 <button className="tm-btn ghost" onClick={loadResearcherData}>
                   再読み込み
                 </button>
                 <button className="tm-btn danger" onClick={() => setConfirmReset(true)}>
-                  <Trash2 size={16} /> 全データを削除
+                  <Ic e="🗑️" size={16} /> 全データを削除
                 </button>
               </div>
 
               {confirmReset && (
                 <div className="tm-confirm-box" style={{ marginTop: 18 }}>
                   <p style={{ margin: "0 0 12px" }}>
-                    <XCircle size={14} style={{ verticalAlign: "-2px", marginRight: 6 }} />
+                    <Ic e="⚠️" size={14} style={{ marginRight: 6 }} />
                     本当にすべてのデータを削除しますか?この操作は取り消せません。
                   </p>
                   <div className="tm-actions">
@@ -851,3 +925,8 @@ export default function TypingMusicStudy() {
     </div>
   );
 }
+
+ReactDOM.createRoot(document.getElementById("root")).render(<TypingMusicStudy />);
+</script>
+</body>
+</html>
