@@ -1,1 +1,282 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>タイピング速度と音楽に関する探究実験</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 15px;
+            background-color: #f4f7f6;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            font-size: 1.5rem;
+            margin-top: 10px;
+            margin-bottom: 20px;
+        }
+        .card {
+            background: #fff;
+            padding: 18px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            margin-bottom: 18px;
+        }
+        label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 6px;
+            font-size: 0.95rem;
+        }
+        select, input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 1rem;
+            background-color: #fafafa;
+        }
+        .text-display {
+            font-size: 1.1rem;
+            background: #eef2f5;
+            padding: 12px;
+            border-radius: 6px;
+            letter-spacing: 0.5px;
+            line-height: 1.5;
+            margin-bottom: 12px;
+            word-break: break-all;
+        }
+        textarea {
+            width: 100%;
+            height: 90px;
+            font-size: 1rem;
+            padding: 10px;
+            border: 2px solid #3498db;
+            border-radius: 6px;
+            resize: none;
+            background-color: #fff;
+        }
+        .stats {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 12px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            color: #444;
+            background: #f8f9fa;
+            padding: 8px 12px;
+            border-radius: 6px;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 12px;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 12px;
+            transition: background 0.2s;
+        }
+        button:active {
+            background-color: #2980b9;
+        }
+        .table-container {
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            font-size: 0.85rem;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px 4px;
+            text-align: center;
+        }
+        th {
+            background-color: #3498db;
+            color: white;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>タイピング計測アプリ (探究用)</h1>
+
+    <div class="card">
+        <label for="subjectName">被験者ID / 名前:</label>
+        <input type="text" id="subjectName" placeholder="例: 被験者A">
+
+        <label for="musicCondition">音楽の条件:</label>
+        <select id="musicCondition">
+            <option value="無音">1. 無音（コントロール）</option>
+            <option value="日本語歌詞あり">2. 日本語歌詞あり</option>
+            <option value="英語歌詞あり">3. 英語歌詞あり</option>
+            <option value="歌詞なし(BGM)">4. 歌詞なし（BGM/インスト）</option>
+        </select>
+    </div>
+
+    <div class="card">
+        <div class="text-display" id="textDisplay"></div>
+        <textarea id="typingInput" placeholder="「テスト開始」を押してから入力してください" disabled></textarea>
+
+        <div class="stats">
+            <span>時間: <span id="timer">0</span>秒</span>
+            <span>KPM: <span id="kpm">0</span></span>
+            <span>ミス: <span id="errors">0</span></span>
+        </div>
+        <button id="startBtn" onclick="startTest()">テスト開始</button>
+    </div>
+
+    <div class="card">
+        <h2 style="font-size: 1.1rem; margin-top:0;">測定結果一覧</h2>
+        <div class="table-container">
+            <table id="resultTable">
+                <thead>
+                    <tr>
+                        <th>被験者</th>
+                        <th>条件</th>
+                        <th>秒</th>
+                        <th>KPM</th>
+                        <th>ミス</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <button onclick="downloadCSV()" style="background-color: #27ae60;">CSV保存（Excel用）</button>
+    </div>
+
+    <script>
+        const targetText = "kyouha iitenkidenode sanponi ikimashou. atarashii発見ga arumoshiremasen.";
+        const displayText = "きょうは いいてんきなので さんぽに いきましょう。 あたらしい はっけんが あるかもしれません。";
+        
+        let timerInterval = null;
+        let startTime = null;
+        let isStarted = false;
+        let errorCount = 0;
+        let results = [];
+
+        const displayEl = document.getElementById("textDisplay");
+        const inputEl = document.getElementById("typingInput");
+        const timerEl = document.getElementById("timer");
+        const kpmEl = document.getElementById("kpm");
+        const errorEl = document.getElementById("errors");
+
+        function init() {
+            displayEl.innerText = displayText + "\n(入力用ローマ字: " + targetText + ")";
+        }
+
+        function startTest() {
+            inputEl.value = "";
+            inputEl.disabled = false;
+            inputEl.focus();
+            isStarted = true;
+            errorCount = 0;
+            errorEl.innerText = "0";
+            kpmEl.innerText = "0";
+            timerEl.innerText = "0";
+            
+            startTime = new Date();
+            clearInterval(timerInterval);
+            timerInterval = setInterval(updateTimer, 100);
+            
+            document.getElementById("startBtn").innerText = "計測中...";
+            document.getElementById("startBtn").disabled = true;
+        }
+
+        function updateTimer() {
+            const now = new Date();
+            const elapsed = ((now - startTime) / 1000).toFixed(1);
+            timerEl.innerText = elapsed;
+        }
+
+        inputEl.addEventListener("input", () => {
+            if (!isStarted) return;
+
+            const typed = inputEl.value;
+            
+            if (!targetText.startsWith(typed)) {
+                errorCount++;
+                errorEl.innerText = errorCount;
+            }
+
+            const elapsedMinutes = (new Date() - startTime) / 1000 / 60;
+            if (elapsedMinutes > 0) {
+                const currentKpm = Math.round(typed.length / elapsedMinutes);
+                kpmEl.innerText = currentKpm;
+            }
+
+            if (typed === targetText) {
+                finishTest();
+            }
+        });
+
+        function finishTest() {
+            clearInterval(timerInterval);
+            isStarted = false;
+            inputEl.disabled = true;
+
+            const endTime = new Date();
+            const totalTime = ((endTime - startTime) / 1000).toFixed(2);
+            const finalKpm = Math.round(targetText.length / (totalTime / 60));
+
+            const name = document.getElementById("subjectName").value || "匿名";
+            const condition = document.getElementById("musicCondition").value;
+
+            const resultData = { name, condition, time: totalTime, kpm: finalKpm, errors: errorCount };
+            results.push(resultData);
+
+            const tbody = document.querySelector("#resultTable tbody");
+            const row = `<tr>
+                <td>${name}</td>
+                <td>${condition}</td>
+                <td>${totalTime}</td>
+                <td>${finalKpm}</td>
+                <td>${errorCount}</td>
+            </tr>`;
+            tbody.insertAdjacentHTML("beforeend", row);
+
+            alert(`計測完了！\nタイム: ${totalTime}秒\nKPM: ${finalKpm}`);
+            
+            document.getElementById("startBtn").innerText = "次のテストを開始";
+            document.getElementById("startBtn").disabled = false;
+        }
+
+        function downloadCSV() {
+            if (results.length === 0) {
+                alert("出力するデータがありません。");
+                return;
+            }
+            let csvContent = "data:text/csv;charset=utf-8,被験者,条件,時間(秒),KPM,ミス数\n";
+            results.forEach(r => {
+                csvContent += `${r.name},${r.condition},${r.time},${r.kpm},${r.errors}\n`;
+            });
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "typing_experiment_results.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        init();
+    </script>
+</body>
+</html>
 
