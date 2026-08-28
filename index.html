@@ -46,7 +46,7 @@
             background-color: #fafafa;
         }
         .text-display {
-            font-size: 1.1rem;
+            font-size: 1.05rem;
             background: #eef2f5;
             padding: 12px;
             border-radius: 6px;
@@ -78,29 +78,30 @@
         }
         .btn-group {
             display: flex;
-            gap: 10px;
+            gap: 8px;
             margin-top: 12px;
         }
         button {
             background-color: #3498db;
             color: white;
             border: none;
-            padding: 12px;
-            font-size: 1rem;
+            padding: 12px 8px;
+            font-size: 0.95rem;
             font-weight: bold;
             border-radius: 6px;
             cursor: pointer;
             width: 100%;
             transition: background 0.2s;
         }
-        button:active {
-            background-color: #2980b9;
+        button:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
         }
         button.stop-btn {
             background-color: #e74c3c;
         }
-        button.stop-btn:active {
-            background-color: #c0392b;
+        button.reset-btn {
+            background-color: #7f8c8d;
         }
         .table-container {
             overflow-x: auto;
@@ -152,6 +153,7 @@
         <div class="btn-group">
             <button id="startBtn" onclick="startTest()">テスト開始</button>
             <button id="stopBtn" class="stop-btn" onclick="finishTest()" disabled>測定終了</button>
+            <button id="resetBtn" class="reset-btn" onclick="resetTest()" disabled>やり直し</button>
         </div>
     </div>
 
@@ -175,7 +177,7 @@
     </div>
 
     <script>
-        const targetText = "kyouha iitenkidenode sanponi ikimashou. atarashii発見ga arumoshiremasen.";
+        const targetText = "kyouha iitenkidenode sanponi ikimashou. atarashii hakkenga arumoshiremasen.";
         const displayText = "きょうは いいてんきなので さんぽに いきましょう。 あたらしい はっけんが あるかもしれません。";
         
         let timerInterval = null;
@@ -191,7 +193,7 @@
         const errorEl = document.getElementById("errors");
 
         function init() {
-            displayEl.innerText = displayText + "\n(入力用ローマ字: " + targetText + ")";
+            displayEl.innerText = displayText + "\n(ローマ字: " + targetText + ")";
         }
 
         function startTest() {
@@ -211,6 +213,7 @@
             document.getElementById("startBtn").innerText = "計測中...";
             document.getElementById("startBtn").disabled = true;
             document.getElementById("stopBtn").disabled = false;
+            document.getElementById("resetBtn").disabled = false;
         }
 
         function updateTimer() {
@@ -270,9 +273,25 @@
 
             alert(`計測完了！\nタイム: ${totalTime}秒\nKPM: ${finalKpm}`);
             
-            document.getElementById("startBtn").innerText = "次のテストを開始";
+            resetButtons();
+        }
+
+        function resetTest() {
+            clearInterval(timerInterval);
+            isStarted = false;
+            inputEl.value = "";
+            inputEl.disabled = true;
+            timerEl.innerText = "0";
+            kpmEl.innerText = "0";
+            errorEl.innerText = "0";
+            resetButtons();
+        }
+
+        function resetButtons() {
+            document.getElementById("startBtn").innerText = "テスト開始";
             document.getElementById("startBtn").disabled = false;
             document.getElementById("stopBtn").disabled = true;
+            document.getElementById("resetBtn").disabled = true;
         }
 
         function downloadCSV() {
