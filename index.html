@@ -139,14 +139,38 @@ const CONDITIONS = {
 };
 
 const PASSAGE_POOL = [
-  "駅前の商店街には昔から続く小さな喫茶店があり、常連客が静かに新聞を読んでいる。",
-  "夏休みの図書館は冷房が効いていて、受験生たちが黙々と参考書に向き合っている。",
-  "早朝の公園ではラジオ体操をする高齢者の声が響き、犬を連れた人が挨拶を交わす。",
-  "新しく買ったキーボードは打鍵音が静かで、深夜でも気にせず作業を続けられる。",
-  "山の頂上から見下ろす街並みは思ったより小さく、風が想像以上に強く吹いていた。",
-  "台所からは味噌汁のにおいが漂い、炊飯器が炊き上がりを知らせる音を鳴らした。",
-  "自転車で通り過ぎた田んぼには稲穂が並び、夕方の光を受けて金色に揺れていた。",
-  "文化祭の準備で教室にはペンキの匂いが広がり、生徒たちは笑いながら看板を作った。",
+  {
+    text: "駅前の商店街には昔から続く小さな喫茶店があり、常連客が静かに新聞を読んでいる。",
+    romaji: "ekimae no shoutengai ni wa mukashi kara tsuzuku chiisana kissaten ga ari, jouren kyaku ga shizuka ni shinbun wo yonde iru.",
+  },
+  {
+    text: "夏休みの図書館は冷房が効いていて、受験生たちが黙々と参考書に向き合っている。",
+    romaji: "natsuyasumi no toshokan wa reibou ga kiite ite, jukensei tachi ga mokumoku to sankousho ni mukiatte iru.",
+  },
+  {
+    text: "早朝の公園ではラジオ体操をする高齢者の声が響き、犬を連れた人が挨拶を交わす。",
+    romaji: "souchou no kouen de wa rajio taisou wo suru koureisha no koe ga hibiki, inu wo tsureta hito ga aisatsu wo kawasu.",
+  },
+  {
+    text: "新しく買ったキーボードは打鍵音が静かで、深夜でも気にせず作業を続けられる。",
+    romaji: "atarashiku katta kiiboodo wa daken on ga shizuka de, shin'ya demo ki ni sezu sagyou wo tsuzukerareru.",
+  },
+  {
+    text: "山の頂上から見下ろす街並みは思ったより小さく、風が想像以上に強く吹いていた。",
+    romaji: "yama no choujou kara miorosu machinami wa omotta yori chiisaku, kaze ga souzou ijou ni tsuyoku fuite ita.",
+  },
+  {
+    text: "台所からは味噌汁のにおいが漂い、炊飯器が炊き上がりを知らせる音を鳴らした。",
+    romaji: "daidokoro kara wa misoshiru no nioi ga tadayoi, suihanki ga takiagari wo shiraseru oto wo narashita.",
+  },
+  {
+    text: "自転車で通り過ぎた田んぼには稲穂が並び、夕方の光を受けて金色に揺れていた。",
+    romaji: "jitensha de toorisugita tanbo ni wa inaho ga narabi, yuugata no hikari wo ukete konjiki ni yurete ita.",
+  },
+  {
+    text: "文化祭の準備で教室にはペンキの匂いが広がり、生徒たちは笑いながら看板を作った。",
+    romaji: "bunkasai no junbi de kyoushitsu ni wa penki no nioi ga hirogari, seito tachi wa warai nagara kanban wo tsukutta.",
+  },
 ];
 
 function shuffle(arr) {
@@ -165,15 +189,17 @@ function makeParticipantId(nickname) {
 }
 
 function toCSV(records) {
-  const header = ["参加者", "条件", "実施順", "CPM(文字/分)", "正確度(%)", "所要時間(秒)", "日時"];
+  const header = ["参加者", "条件", "音楽(曲名/ジャンル)", "実施順", "CPM(文字/分)", "正確度(%)", "ミス数", "所要時間(秒)", "日時"];
   const lines = [header.join(",")];
   records.forEach((r) => {
     const row = [
       r.participant,
       CONDITIONS[r.condition]?.label ?? r.condition,
+      r.musicInfo || "-",
       r.orderIndex,
       r.cpm,
       r.accuracy,
+      r.mistakes ?? "",
       r.elapsedSec,
       new Date(r.timestamp).toLocaleString("ja-JP"),
     ].map((v) => `"${String(v).replace(/"/g, '""')}"`);
@@ -216,13 +242,15 @@ function TypingMusicStudy() {
   const [trialIndex, setTrialIndex] = useState(0);
   const [trialResults, setTrialResults] = useState([]);
 
-  const [inputValue, setInputValue] = useState("");
+  const [typedIndex, setTypedIndex] = useState(0);
+  const [justWrong, setJustWrong] = useState(false);
+  const [musicInfo, setMusicInfo] = useState("");
   const [lastTrial, setLastTrial] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
 
   const startTimeRef = useRef(null);
-  const keystrokeRef = useRef(0);
+  const mistakeCountRef = useRef(0);
 
   // researcher
   const [researcherRecords, setResearcherRecords] = useState(null);
@@ -232,7 +260,9 @@ function TypingMusicStudy() {
 
   const currentConditionKey = conditionOrder[trialIndex];
   const currentCondition = currentConditionKey ? CONDITIONS[currentConditionKey] : null;
-  const currentPassage = currentConditionKey ? assignedPassages[currentConditionKey] : "";
+  const currentPassageObj = currentConditionKey ? assignedPassages[currentConditionKey] : null;
+  const currentText = currentPassageObj ? currentPassageObj.text : "";
+  const currentRomaji = currentPassageObj ? currentPassageObj.romaji : "";
 
   /* ------------------------------- 登録 ------------------------------- */
   const beginStudy = () => {
@@ -245,66 +275,89 @@ function TypingMusicStudy() {
     setParticipantId(makeParticipantId(nickname));
     setTrialIndex(0);
     setTrialResults([]);
+    setMusicInfo("");
     setScreen("instruction");
   };
 
   /* ------------------------------ タイピング ------------------------------ */
   const startTyping = () => {
-    setInputValue("");
+    setTypedIndex(0);
+    setJustWrong(false);
     startTimeRef.current = null;
-    keystrokeRef.current = 0;
+    mistakeCountRef.current = 0;
     setScreen("typing");
   };
 
-  const finalizeTrial = useCallback(
-    async (finalValue) => {
-      const elapsedMs = Date.now() - (startTimeRef.current ?? Date.now());
-      const elapsedSec = Math.max(0.5, elapsedMs / 1000);
-      const cpm = Math.round(currentPassage.length / (elapsedSec / 60));
-      const keystrokes = Math.max(keystrokeRef.current, currentPassage.length);
-      const accuracy = Math.min(100, Math.round((currentPassage.length / keystrokes) * 100));
+  const finalizeTrial = useCallback(async () => {
+    const elapsedMs = Date.now() - (startTimeRef.current ?? Date.now());
+    const elapsedSec = Math.max(0.5, elapsedMs / 1000);
+    const cpm = Math.round(currentText.length / (elapsedSec / 60));
+    const mistakes = mistakeCountRef.current;
+    const accuracy = Math.max(
+      0,
+      Math.min(100, Math.round((currentRomaji.length / (currentRomaji.length + mistakes)) * 100))
+    );
 
-      const record = {
-        participant: participantId,
-        condition: currentConditionKey,
-        orderIndex: trialIndex + 1,
-        cpm,
-        accuracy,
-        elapsedSec: Math.round(elapsedSec * 10) / 10,
-        passageLength: currentPassage.length,
-        timestamp: Date.now(),
-      };
+    const record = {
+      participant: participantId,
+      condition: currentConditionKey,
+      musicInfo: currentConditionKey === "silent" ? "" : musicInfo.trim(),
+      orderIndex: trialIndex + 1,
+      cpm,
+      accuracy,
+      mistakes,
+      elapsedSec: Math.round(elapsedSec * 10) / 10,
+      passageLength: currentText.length,
+      timestamp: Date.now(),
+    };
 
-      setLastTrial(record);
-      setTrialResults((prev) => [...prev, record]);
-      setSaving(true);
-      setSaveError("");
-      try {
-        await window.sheetApi.saveRecord(record);
-      } catch (e) {
-        setSaveError("データの保存に失敗しました。通信環境を確認してもう一度お試しください。");
-      } finally {
-        setSaving(false);
-      }
-      setScreen("trialResult");
-    },
-    [currentPassage, currentConditionKey, participantId, trialIndex]
-  );
+    setLastTrial(record);
+    setTrialResults((prev) => [...prev, record]);
+    setSaving(true);
+    setSaveError("");
+    try {
+      await window.sheetApi.saveRecord(record);
+    } catch (e) {
+      setSaveError("データの保存に失敗しました。通信環境を確認してもう一度お試しください。");
+    } finally {
+      setSaving(false);
+    }
+    setScreen("trialResult");
+  }, [currentText, currentRomaji, currentConditionKey, participantId, trialIndex, musicInfo]);
 
-  const handleInputChange = (e) => {
-    const value = e.target.value;
-    if (value.length > currentPassage.length) return; // 長すぎる入力は無視
-    if (startTimeRef.current === null && value.length > 0) {
+  /* -------------------------------------------------------------------
+     ローマ字専用タイピング処理(かな変換なし)
+     ------------------------------------------------------------------
+     ・<input>を使わず、物理的なキー入力(keydown)そのものをローマ字の
+       目標文字列と1文字ずつ比較する
+     ・編集可能なテキスト欄に入力しているわけではないので、IME(かな変換)
+       が起動する余地がそもそもない
+     ・正しいキーを押した時だけ次に進む。間違ったキーは何も入力されず、
+       ミスとしてカウントされるだけ
+     ------------------------------------------------------------------- */
+  const handleTypingKeyDown = (e) => {
+    const key = e.key;
+    if (key.length !== 1) return; // Shift/Enter/矢印キーなど文字以外は無視
+    e.preventDefault();
+    if (startTimeRef.current === null) {
       startTimeRef.current = Date.now();
     }
-    keystrokeRef.current += 1;
-    setInputValue(value);
-    if (value === currentPassage) {
-      finalizeTrial(value);
+    const expected = currentRomaji[typedIndex];
+    if (key === expected) {
+      const nextIndex = typedIndex + 1;
+      setTypedIndex(nextIndex);
+      if (nextIndex === currentRomaji.length) {
+        finalizeTrial();
+      }
+    } else {
+      mistakeCountRef.current += 1;
+      setJustWrong(true);
+      setTimeout(() => setJustWrong(false), 150);
     }
   };
 
   const goNextTrial = () => {
+    setMusicInfo("");
     if (trialIndex + 1 < conditionOrder.length) {
       setTrialIndex((i) => i + 1);
       setScreen("instruction");
@@ -320,6 +373,7 @@ function TypingMusicStudy() {
     setAgreed(false);
     setTrialResults([]);
     setTrialIndex(0);
+    setMusicInfo("");
   };
 
   /* ----------------------------- 研究者ダッシュボード ----------------------------- */
@@ -486,27 +540,35 @@ function TypingMusicStudy() {
 
         .tm-instruction-text { font-size: 15.5px; line-height: 1.95; color: var(--text); margin-bottom: 26px; }
 
+        .tm-reading-text {
+          font-size: 15px; line-height: 1.9; color: var(--muted);
+          margin: 0 0 10px; padding: 0 2px;
+        }
+
         .tm-passage {
-          font-family: 'JetBrains Mono', 'Zen Kaku Gothic New', monospace;
+          font-family: 'JetBrains Mono', monospace;
           font-size: 18px; line-height: 2.1; letter-spacing: 0.01em;
           padding: 20px; background: rgba(0,0,0,0.25); border-radius: 12px;
           border: 1px solid var(--line); margin-bottom: 18px; word-break: break-all;
         }
         .char-pending { color: var(--muted); }
         .char-correct { color: var(--mint); }
-        .char-wrong { color: var(--coral); text-decoration: underline; }
         .char-caret { background: var(--accent); color: #1B1E2B; border-radius: 2px; }
+        .char-wrong-flash { background: var(--coral) !important; }
         @media (prefers-reduced-motion: no-preference) {
           .char-caret { animation: tm-pulse 1s ease-in-out infinite; }
         }
         @keyframes tm-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
 
-        .tm-typing-input {
-          width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--line);
-          border-radius: 12px; padding: 14px 16px; color: var(--text);
-          font-family: 'JetBrains Mono', monospace; font-size: 16px; margin-bottom: 20px;
+        .tm-typing-focus {
+          width: 100%; background: rgba(0,0,0,0.3); border: 1px dashed var(--line);
+          border-radius: 12px; padding: 16px; color: var(--muted);
+          font-size: 13.5px; margin-bottom: 20px; text-align: center; cursor: text;
         }
-        .tm-typing-input:focus-visible { outline: 2px solid var(--accent); }
+        .tm-typing-focus:focus,
+        .tm-typing-focus:focus-visible {
+          outline: 2px solid var(--accent); border-style: solid; color: var(--text);
+        }
 
         .tm-meta-row { display:flex; justify-content: space-between; font-size: 12.5px; color: var(--muted); margin-bottom: 10px; font-family: 'JetBrains Mono', monospace; }
 
@@ -674,7 +736,22 @@ function TypingMusicStudy() {
             <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 24 }}>
               開始すると短い日本語の文章が表示されます。表示された文章を、できるだけ速く・正確に入力してください。
             </p>
-            <button className="tm-btn" onClick={startTyping}>
+            {currentCondition.key !== "silent" && (
+              <div className="tm-field">
+                <label>今から聴く曲・アーティスト名(わからなければジャンルでOK)</label>
+                <input
+                  type="text"
+                  value={musicInfo}
+                  onChange={(e) => setMusicInfo(e.target.value)}
+                  placeholder="例:YOASOBI「アイドル」/ 例:ローファイHipHop"
+                />
+              </div>
+            )}
+            <button
+              className="tm-btn"
+              onClick={startTyping}
+              disabled={currentCondition.key !== "silent" && !musicInfo.trim()}
+            >
               タイピングを開始 <Ic e="→" size={16} />
             </button>
           </div>
@@ -692,30 +769,25 @@ function TypingMusicStudy() {
             条件 {trialIndex + 1}:{currentCondition.label}
           </div>
           <div className="tm-meta-row">
-            <span>{inputValue.length} / {currentPassage.length} 文字</span>
-            <span>正しく最後まで入力すると自動で終了します</span>
+            <span>{typedIndex} / {currentRomaji.length} 打鍵(ローマ字)</span>
+            <span>最後まで打つと自動で終了します</span>
           </div>
+          <p className="tm-reading-text">{currentText}</p>
           <div className="tm-passage">
-            {currentPassage.split("").map((ch, i) => {
+            {currentRomaji.split("").map((ch, i) => {
               let cls = "char-pending";
-              if (i < inputValue.length) cls = inputValue[i] === ch ? "char-correct" : "char-wrong";
-              else if (i === inputValue.length) cls = "char-caret";
+              if (i < typedIndex) cls = "char-correct";
+              else if (i === typedIndex) cls = justWrong ? "char-caret char-wrong-flash" : "char-caret";
               return (
                 <span key={i} className={cls}>
-                  {ch}
+                  {ch === " " ? "\u00A0" : ch}
                 </span>
               );
             })}
           </div>
-          <input
-            className="tm-typing-input"
-            type="text"
-            value={inputValue}
-            onChange={handleInputChange}
-            onPaste={(e) => e.preventDefault()}
-            autoFocus
-            placeholder="ここに入力してください"
-          />
+          <div className="tm-typing-focus" tabIndex={0} autoFocus onKeyDown={handleTypingKeyDown}>
+            ここをクリックしてから、変換なしでローマ字のまま打ってください(IMEはオフのままでOK)
+          </div>
         </div>
       )}
 
@@ -852,8 +924,10 @@ function TypingMusicStudy() {
                     <tr>
                       <th>参加者</th>
                       <th>条件</th>
+                      <th>音楽</th>
                       <th>CPM</th>
                       <th>正確度</th>
+                      <th>ミス数</th>
                       <th>時間(秒)</th>
                       <th>日時</th>
                     </tr>
@@ -863,8 +937,10 @@ function TypingMusicStudy() {
                       <tr key={i}>
                         <td>{r.participant}</td>
                         <td>{CONDITIONS[r.condition]?.label}</td>
+                        <td>{r.musicInfo || "-"}</td>
                         <td>{r.cpm}</td>
                         <td>{r.accuracy}%</td>
+                        <td>{r.mistakes ?? "-"}</td>
                         <td>{r.elapsedSec}</td>
                         <td>{new Date(r.timestamp).toLocaleString("ja-JP")}</td>
                       </tr>
