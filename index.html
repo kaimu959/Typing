@@ -138,40 +138,138 @@ const CONDITIONS = {
   },
 };
 
+/* -------------------------------------------------------------------
+   PASSAGE_POOL
+   ------------------------------------------------------------------
+   各文章について、表示用の漢字混じり文(text)と、その「かな読み」
+   (kana)を持たせています。kana はスペースなしの完全な読み仮名で、
+   助詞の「は」は発音どおり「わ」、「へ」が使われる場合は「え」で
+   書いています。ここからローマ字の入力候補を自動生成するので、
+   ローマ字そのものは持ちません。
+   ------------------------------------------------------------------- */
 const PASSAGE_POOL = [
   {
     text: "駅前の商店街には昔から続く小さな喫茶店があり、常連客が静かに新聞を読んでいる。",
-    romaji: "ekimae no shoutengai ni wa mukashi kara tsuzuku chiisana kissaten ga ari, jouren kyaku ga shizuka ni shinbun wo yonde iru.",
+    kana: "えきまえのしょうてんがいにわむかしからつづくちいさなきっさてんがあり、じょうれんきゃくがしずかにしんぶんをよんでいる。",
   },
   {
     text: "夏休みの図書館は冷房が効いていて、受験生たちが黙々と参考書に向き合っている。",
-    romaji: "natsuyasumi no toshokan wa reibou ga kiite ite, jukensei tachi ga mokumoku to sankousho ni mukiatte iru.",
+    kana: "なつやすみのとしょかんわれいぼうがきいていて、じゅけんせいたちがもくもくとさんこうしょにむきあっている。",
   },
   {
     text: "早朝の公園ではラジオ体操をする高齢者の声が響き、犬を連れた人が挨拶を交わす。",
-    romaji: "souchou no kouen de wa rajio taisou wo suru koureisha no koe ga hibiki, inu wo tsureta hito ga aisatsu wo kawasu.",
+    kana: "そうちょうのこうえんでわらじおたいそうをするこうれいしゃのこえがひびき、いぬをつれたひとがあいさつをかわす。",
   },
   {
     text: "新しく買ったキーボードは打鍵音が静かで、深夜でも気にせず作業を続けられる。",
-    romaji: "atarashiku katta kiiboodo wa daken on ga shizuka de, shin'ya demo ki ni sezu sagyou wo tsuzukerareru.",
+    kana: "あたらしくかったきいぼおどわだけんおんがしずかで、しんやでもきにせずさぎょうをつづけられる。",
   },
   {
     text: "山の頂上から見下ろす街並みは思ったより小さく、風が想像以上に強く吹いていた。",
-    romaji: "yama no choujou kara miorosu machinami wa omotta yori chiisaku, kaze ga souzou ijou ni tsuyoku fuite ita.",
+    kana: "やまのちょうじょうからみおろすまちなみわおもったよりちいさく、かぜがそうぞういじょうにつよくふいていた。",
   },
   {
     text: "台所からは味噌汁のにおいが漂い、炊飯器が炊き上がりを知らせる音を鳴らした。",
-    romaji: "daidokoro kara wa misoshiru no nioi ga tadayoi, suihanki ga takiagari wo shiraseru oto wo narashita.",
+    kana: "だいどころからわみそしるのにおいがただよい、すいはんきがたきあがりをしらせるおとをならした。",
   },
   {
     text: "自転車で通り過ぎた田んぼには稲穂が並び、夕方の光を受けて金色に揺れていた。",
-    romaji: "jitensha de toorisugita tanbo ni wa inaho ga narabi, yuugata no hikari wo ukete konjiki ni yurete ita.",
+    kana: "じてんしゃでとおりすぎたたんぼにわいなほがならび、ゆうがたのひかりをうけてこんじきにゆれていた。",
   },
   {
     text: "文化祭の準備で教室にはペンキの匂いが広がり、生徒たちは笑いながら看板を作った。",
-    romaji: "bunkasai no junbi de kyoushitsu ni wa penki no nioi ga hirogari, seito tachi wa warai nagara kanban wo tsukutta.",
+    kana: "ぶんかさいのじゅんびできょうしつにわぺんきのにおいがひろがり、せいとたちわわらいながらかんばんをつくった。",
   },
 ];
+
+/* =========================================================================
+   かな → ローマ字候補 変換エンジン
+   ------------------------------------------------------------------------
+   1つの「かな」(モーラ)に対して、入力として受け付けるローマ字表記を
+   複数持たせたテーブルです。例えば「ち」は "chi"(ヘボン式)と
+   "ti"(訓令式・かな入力寄り)の両方を受け付けます。
+   タイピング中は、その時点で押されたキーに矛盾しない候補だけを残して
+   いき、候補の1つが文字数ぴったり一致したところでそのモーラの入力完了
+   とみなします。
+   ========================================================================= */
+const ROMAJI_TABLE = {
+  "あ": ["a"], "い": ["i"], "う": ["u"], "え": ["e"], "お": ["o"],
+  "か": ["ka"], "き": ["ki"], "く": ["ku"], "け": ["ke"], "こ": ["ko"],
+  "さ": ["sa"], "し": ["shi", "si"], "す": ["su"], "せ": ["se"], "そ": ["so"],
+  "た": ["ta"], "ち": ["chi", "ti"], "つ": ["tsu", "tu"], "て": ["te"], "と": ["to"],
+  "な": ["na"], "に": ["ni"], "ぬ": ["nu"], "ね": ["ne"], "の": ["no"],
+  "は": ["ha"], "ひ": ["hi"], "ふ": ["fu", "hu"], "へ": ["he"], "ほ": ["ho"],
+  "ま": ["ma"], "み": ["mi"], "む": ["mu"], "め": ["me"], "も": ["mo"],
+  "や": ["ya"], "ゆ": ["yu"], "よ": ["yo"],
+  "ら": ["ra"], "り": ["ri"], "る": ["ru"], "れ": ["re"], "ろ": ["ro"],
+  "わ": ["wa"], "ゐ": ["wi"], "ゑ": ["we"], "を": ["wo", "o"], "ん": ["n"],
+  "が": ["ga"], "ぎ": ["gi"], "ぐ": ["gu"], "げ": ["ge"], "ご": ["go"],
+  "ざ": ["za"], "じ": ["ji", "zi"], "ず": ["zu"], "ぜ": ["ze"], "ぞ": ["zo"],
+  "だ": ["da"], "ぢ": ["ji", "di", "zi"], "づ": ["zu", "du"], "で": ["de"], "ど": ["do"],
+  "ば": ["ba"], "び": ["bi"], "ぶ": ["bu"], "べ": ["be"], "ぼ": ["bo"],
+  "ぱ": ["pa"], "ぴ": ["pi"], "ぷ": ["pu"], "ぺ": ["pe"], "ぽ": ["po"],
+  "ぁ": ["a"], "ぃ": ["i"], "ぅ": ["u"], "ぇ": ["e"], "ぉ": ["o"],
+  "きゃ": ["kya"], "きゅ": ["kyu"], "きょ": ["kyo"],
+  "しゃ": ["sha", "sya"], "しゅ": ["shu", "syu"], "しょ": ["sho", "syo"],
+  "ちゃ": ["cha", "tya"], "ちゅ": ["chu", "tyu"], "ちょ": ["cho", "tyo"],
+  "にゃ": ["nya"], "にゅ": ["nyu"], "にょ": ["nyo"],
+  "ひゃ": ["hya"], "ひゅ": ["hyu"], "ひょ": ["hyo"],
+  "みゃ": ["mya"], "みゅ": ["myu"], "みょ": ["myo"],
+  "りゃ": ["rya"], "りゅ": ["ryu"], "りょ": ["ryo"],
+  "ぎゃ": ["gya"], "ぎゅ": ["gyu"], "ぎょ": ["gyo"],
+  "じゃ": ["ja", "jya", "zya"], "じゅ": ["ju", "jyu", "zyu"], "じょ": ["jo", "jyo", "zyo"],
+  "びゃ": ["bya"], "びゅ": ["byu"], "びょ": ["byo"],
+  "ぴゃ": ["pya"], "ぴゅ": ["pyu"], "ぴょ": ["pyo"],
+};
+const YOON_SMALL = "ゃゅょ";
+
+// 全角カタカナをひらがなに正規化(念のため。現在のPASSAGE_POOLはひらがなのみ)
+function normalizeKana(s) {
+  return s.replace(/[\u30a1-\u30f6]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
+}
+
+// 文字列 s の位置 i から、1モーラ分(拗音なら2文字)の候補を読み取る
+function readMoraAt(s, i) {
+  if (i + 1 < s.length && YOON_SMALL.includes(s[i + 1]) && ROMAJI_TABLE[s[i] + s[i + 1]]) {
+    return { candidates: ROMAJI_TABLE[s[i] + s[i + 1]], consumed: 2 };
+  }
+  if (ROMAJI_TABLE[s[i]]) {
+    return { candidates: ROMAJI_TABLE[s[i]], consumed: 1 };
+  }
+  return { candidates: [s[i]], consumed: 1 };
+}
+
+// かな読み文字列 → 入力チャンク列(各チャンクは複数のローマ字候補を持つ)
+function buildChunks(reading) {
+  const s = normalizeKana(reading || "");
+  const chunks = [];
+  let i = 0;
+  while (i < s.length) {
+    const c = s[i];
+    if (c === "、" || c === ",") {
+      chunks.push({ candidates: [","] });
+      i += 1;
+      continue;
+    }
+    if (c === "。" || c === ".") {
+      chunks.push({ candidates: ["."] });
+      i += 1;
+      continue;
+    }
+    if (c === "っ" || c === "ッ") {
+      // 促音:次のモーラの子音を重ねる(例:「っさ」→ "ssa" / 「っち・っと」→ "cchi"/"tti")
+      const { candidates, consumed } = readMoraAt(s, i + 1);
+      const geminated = candidates.map((cand) => cand[0] + cand);
+      chunks.push({ candidates: geminated });
+      i += 1 + consumed;
+      continue;
+    }
+    const { candidates, consumed } = readMoraAt(s, i);
+    chunks.push({ candidates });
+    i += consumed;
+  }
+  return chunks;
+}
 
 function shuffle(arr) {
   const a = [...arr];
@@ -242,7 +340,12 @@ function TypingMusicStudy() {
   const [trialIndex, setTrialIndex] = useState(0);
   const [trialResults, setTrialResults] = useState([]);
 
-  const [typedIndex, setTypedIndex] = useState(0);
+  // タイピング進行状態(チャンク単位)
+  const [curChunkIndex, setCurChunkIndex] = useState(0);
+  const [curFiltered, setCurFiltered] = useState([]);
+  const [curMatchedLen, setCurMatchedLen] = useState(0);
+  const [curCommitted, setCurCommitted] = useState([]);
+
   const [justWrong, setJustWrong] = useState(false);
   const [musicInfo, setMusicInfo] = useState("");
   const [lastTrial, setLastTrial] = useState(null);
@@ -262,7 +365,31 @@ function TypingMusicStudy() {
   const currentCondition = currentConditionKey ? CONDITIONS[currentConditionKey] : null;
   const currentPassageObj = currentConditionKey ? assignedPassages[currentConditionKey] : null;
   const currentText = currentPassageObj ? currentPassageObj.text : "";
-  const currentRomaji = currentPassageObj ? currentPassageObj.romaji : "";
+
+  // かな読みから、入力チャンク(モーラ単位・複数ローマ字候補つき)を生成
+  const currentChunks = useMemo(
+    () => (currentPassageObj ? buildChunks(currentPassageObj.kana) : []),
+    [currentPassageObj]
+  );
+
+  // 画面表示用のローマ字プレビュー文字列(確定済みは実際に打った表記、
+  // 現在打っている途中のチャンクは絞り込まれた候補の先頭、
+  // まだのチャンクはデフォルト表記を仮表示する)
+  const previewText = useMemo(() => {
+    return currentChunks
+      .map((chunk, idx) => {
+        if (idx < curChunkIndex) return curCommitted[idx] ?? chunk.candidates[0];
+        if (idx === curChunkIndex) return curFiltered[0] ?? chunk.candidates[0];
+        return chunk.candidates[0];
+      })
+      .join("");
+  }, [currentChunks, curChunkIndex, curCommitted, curFiltered]);
+
+  // これまでに正しく打鍵した文字数(プレビュー文字列の中でのカーソル位置)
+  const typedCount = useMemo(
+    () => curCommitted.reduce((s, c) => s + c.length, 0) + curMatchedLen,
+    [curCommitted, curMatchedLen]
+  );
 
   /* ------------------------------- 登録 ------------------------------- */
   const beginStudy = () => {
@@ -281,78 +408,107 @@ function TypingMusicStudy() {
 
   /* ------------------------------ タイピング ------------------------------ */
   const startTyping = () => {
-    setTypedIndex(0);
+    const chunks = currentPassageObj ? buildChunks(currentPassageObj.kana) : [];
+    setCurChunkIndex(0);
+    setCurCommitted([]);
+    setCurMatchedLen(0);
+    setCurFiltered(chunks[0] ? chunks[0].candidates : []);
     setJustWrong(false);
     startTimeRef.current = null;
     mistakeCountRef.current = 0;
     setScreen("typing");
   };
 
-  const finalizeTrial = useCallback(async () => {
-    const elapsedMs = Date.now() - (startTimeRef.current ?? Date.now());
-    const elapsedSec = Math.max(0.5, elapsedMs / 1000);
-    const cpm = Math.round(currentText.length / (elapsedSec / 60));
-    const mistakes = mistakeCountRef.current;
-    const accuracy = Math.max(
-      0,
-      Math.min(100, Math.round((currentRomaji.length / (currentRomaji.length + mistakes)) * 100))
-    );
+  const finalizeTrial = useCallback(
+    async (finalCommitted) => {
+      const elapsedMs = Date.now() - (startTimeRef.current ?? Date.now());
+      const elapsedSec = Math.max(0.5, elapsedMs / 1000);
+      const cpm = Math.round(currentText.length / (elapsedSec / 60));
+      const mistakes = mistakeCountRef.current;
+      const totalTypedLen = finalCommitted.reduce((s, c) => s + c.length, 0);
+      const accuracy = Math.max(
+        0,
+        Math.min(100, Math.round((totalTypedLen / (totalTypedLen + mistakes)) * 100))
+      );
 
-    const record = {
-      participant: participantId,
-      condition: currentConditionKey,
-      musicInfo: currentConditionKey === "silent" ? "" : musicInfo.trim(),
-      orderIndex: trialIndex + 1,
-      cpm,
-      accuracy,
-      mistakes,
-      elapsedSec: Math.round(elapsedSec * 10) / 10,
-      passageLength: currentText.length,
-      timestamp: Date.now(),
-    };
+      const record = {
+        participant: participantId,
+        condition: currentConditionKey,
+        musicInfo: currentConditionKey === "silent" ? "" : musicInfo.trim(),
+        orderIndex: trialIndex + 1,
+        cpm,
+        accuracy,
+        mistakes,
+        elapsedSec: Math.round(elapsedSec * 10) / 10,
+        passageLength: currentText.length,
+        timestamp: Date.now(),
+      };
 
-    setLastTrial(record);
-    setTrialResults((prev) => [...prev, record]);
-    setSaving(true);
-    setSaveError("");
-    try {
-      await window.sheetApi.saveRecord(record);
-    } catch (e) {
-      setSaveError("データの保存に失敗しました。通信環境を確認してもう一度お試しください。");
-    } finally {
-      setSaving(false);
-    }
-    setScreen("trialResult");
-  }, [currentText, currentRomaji, currentConditionKey, participantId, trialIndex, musicInfo]);
+      setLastTrial(record);
+      setTrialResults((prev) => [...prev, record]);
+      setSaving(true);
+      setSaveError("");
+      try {
+        await window.sheetApi.saveRecord(record);
+      } catch (e) {
+        setSaveError("データの保存に失敗しました。通信環境を確認してもう一度お試しください。");
+      } finally {
+        setSaving(false);
+      }
+      setScreen("trialResult");
+    },
+    [currentText, currentConditionKey, participantId, trialIndex, musicInfo]
+  );
 
   /* -------------------------------------------------------------------
-     ローマ字専用タイピング処理(かな変換なし)
+     タイピング処理(表記ゆれ対応版)
      ------------------------------------------------------------------
-     ・<input>を使わず、物理的なキー入力(keydown)そのものをローマ字の
-       目標文字列と1文字ずつ比較する
+     ・<input>を使わず、物理的なキー入力(keydown)そのものを、現在の
+       チャンクに残っている候補群と1文字ずつ比較する
+     ・押したキーが候補のどれか1つにでも一致すれば正解として先に進む
+       (例:「ち」のチャンクは "chi" と "ti" の両方が候補なので、
+        どちらで打っても正解になる)
+     ・候補のどれかが打った長さでちょうど一致したら、そのモーラの入力
+       完了とみなし、次のチャンクに進む
      ・編集可能なテキスト欄に入力しているわけではないので、IME(かな変換)
        が起動する余地がそもそもない
-     ・正しいキーを押した時だけ次に進む。間違ったキーは何も入力されず、
-       ミスとしてカウントされるだけ
      ------------------------------------------------------------------- */
   const handleTypingKeyDown = (e) => {
     const key = e.key;
     if (key.length !== 1) return; // Shift/Enter/矢印キーなど文字以外は無視
     e.preventDefault();
+    if (!currentChunks.length) return;
     if (startTimeRef.current === null) {
       startTimeRef.current = Date.now();
     }
-    const expected = currentRomaji[typedIndex];
-    if (key === expected) {
-      const nextIndex = typedIndex + 1;
-      setTypedIndex(nextIndex);
-      if (nextIndex === currentRomaji.length) {
-        finalizeTrial();
-      }
-    } else {
+
+    const chunk = currentChunks[curChunkIndex];
+    if (!chunk) return;
+
+    const newLen = curMatchedLen + 1;
+    const nextFiltered = curFiltered.filter((c) => c.length >= newLen && c[newLen - 1] === key);
+
+    if (nextFiltered.length === 0) {
       mistakeCountRef.current += 1;
       setJustWrong(true);
       setTimeout(() => setJustWrong(false), 150);
+      return;
+    }
+
+    const completed = nextFiltered.find((c) => c.length === newLen);
+    if (completed) {
+      const newCommitted = [...curCommitted, completed];
+      if (curChunkIndex + 1 >= currentChunks.length) {
+        finalizeTrial(newCommitted);
+      } else {
+        setCurCommitted(newCommitted);
+        setCurChunkIndex(curChunkIndex + 1);
+        setCurFiltered(currentChunks[curChunkIndex + 1].candidates);
+        setCurMatchedLen(0);
+      }
+    } else {
+      setCurFiltered(nextFiltered);
+      setCurMatchedLen(newLen);
     }
   };
 
@@ -543,6 +699,10 @@ function TypingMusicStudy() {
         .tm-reading-text {
           font-size: 15px; line-height: 1.9; color: var(--muted);
           margin: 0 0 10px; padding: 0 2px;
+        }
+
+        .tm-hint-text {
+          font-size: 12px; color: var(--muted); margin: 0 0 14px; padding: 0 2px; line-height: 1.7;
         }
 
         .tm-passage {
@@ -769,15 +929,18 @@ function TypingMusicStudy() {
             条件 {trialIndex + 1}:{currentCondition.label}
           </div>
           <div className="tm-meta-row">
-            <span>{typedIndex} / {currentRomaji.length} 打鍵(ローマ字)</span>
+            <span>{curChunkIndex} / {currentChunks.length} 文字</span>
             <span>最後まで打つと自動で終了します</span>
           </div>
+          <p className="tm-hint-text">
+            ローマ字はヘボン式・訓令式どちらでも入力できます(例:chi/ti、shi/si、tsu/tu、fu/hu、ja/zya など)。単語の間にスペースは不要です。
+          </p>
           <p className="tm-reading-text">{currentText}</p>
           <div className="tm-passage">
-            {currentRomaji.split("").map((ch, i) => {
+            {previewText.split("").map((ch, i) => {
               let cls = "char-pending";
-              if (i < typedIndex) cls = "char-correct";
-              else if (i === typedIndex) cls = justWrong ? "char-caret char-wrong-flash" : "char-caret";
+              if (i < typedCount) cls = "char-correct";
+              else if (i === typedCount) cls = justWrong ? "char-caret char-wrong-flash" : "char-caret";
               return (
                 <span key={i} className={cls}>
                   {ch === " " ? "\u00A0" : ch}
